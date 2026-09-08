@@ -1,0 +1,73 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { route } from '../lib/http.js';
+import { chat } from '../chat/engine.js';
+import {
+  createConversation,
+  flaggedMessages,
+  getConversationOrThrow,
+  getMessages,
+  listConversations,
+  rateMessage,
+} from '../domain/conversations.js';
+import { priceCart } from '../domain/orders.js';
+import { hasLLM } from '../config.js';
+
+export const chatRouter = Router();
+
+const chatBody = z.object({
+  conversation_id: z.string().optional(),
+  message: z.string().min(1, 'El mensaje no puede estar vacio').max(2000),
+  channel: z.string().optional(),
+  customer_name: z.string().optional(),
+});
+
+chatRouter.post(
+  '/',
+  route(async (req) => {
+    const body = chatBody.parse(req.body);
+    const conversationId =
+      body.conversation_id ??
+      createConversation({ channel: body.channel, customer_name: body.customer_name }).id;
+    return chat(conversationId, body.message);
+  }),
+);
+
+chatRouter.post(
+  '/conversations',
+  route((req) => createConversation(req.body ?? {})),
+);
+
+chatRouter.get(
+  '/conversations',
+  route(() => listConversations()),
+);
+
+chatRouter.get(
+  '/conversations/:id',
+  route((req) => {
+    const conversation = getConversationOrThrow(req.params.id!);
+    const cart = conversation.cart.length ? priceCart(conversation.cart) : { lines: [], subtotal_cents: 0 };
+    return { conversation, messages: getMessages(conversation.id), cart };
+  }),
+);
+
+chatRouter.post(
+  '/messages/:id/rating',
+  route((req) => {
+    const { rating } = z.object({ rating: z.union([z.literal(1), z.literal(-1)]) }).parse(req.body);
+    rateMessage(req.params.id!, rating);
+    return { ok: true };
+  }),
+);
+
+/** Mensajes marcados como malos: la cola de trabajo para mejorar el bot. */
+chatRouter.get(
+  '/flagged',
+  route(() => flaggedMessages()),
+);
+
+chatRouter.get(
+  '/engine',
+  route(() => ({ engine: hasLLM() ? 'llm' : 'deterministico' })),
+);
