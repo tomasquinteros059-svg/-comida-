@@ -1,6 +1,8 @@
 import { all, get, jsonParse, run, transaction } from '../db/index.js';
+import { config } from '../config.js';
 import { newId, shortCode } from '../lib/ids.js';
 import { badRequest, conflict, notFound } from '../lib/http.js';
+import { parseSqliteDate } from '../lib/text.js';
 import { assertProductOrderable, getModifiers } from './menu.js';
 import { checkAvailability, consumeForOrder, restoreForOrder, syncProductAvailability } from './stock.js';
 import type { CartLine, OrderStatus, PricedLine, ServiceType } from './types.js';
@@ -368,6 +370,22 @@ export function advanceOrder(
   return getOrderOrThrow(orderId);
 }
 
+/**
+ * Fecha y hora para la comanda, en 24 h y en la zona horaria del local.
+ * El formato por defecto de es-AR imprime "07:22" para las 19:22, sin marcar
+ * am/pm: en una cocina eso es una comanda mal leida.
+ */
+function formatTicketTime(createdAt: string): string {
+  return parseSqliteDate(createdAt).toLocaleString('es-AR', {
+    timeZone: config.timezone,
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+}
+
 /** Ticket de cocina en texto plano, listo para imprimir en comandera. */
 export function kitchenTicket(orderId: string): string {
   const order = getOrderOrThrow(orderId);
@@ -379,7 +397,7 @@ export function kitchenTicket(orderId: string): string {
     order.code.padStart(Math.floor((width + order.code.length) / 2)),
     line,
     `${order.service_type.toUpperCase()}${order.table_label ? `  MESA ${order.table_label}` : ''}`,
-    `${new Date(order.created_at + 'Z').toLocaleString('es-AR')}`,
+    formatTicketTime(order.created_at),
     order.customer_name ? `Cliente: ${order.customer_name}` : '',
     line,
   ].filter(Boolean);

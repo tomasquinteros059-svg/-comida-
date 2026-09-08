@@ -343,7 +343,7 @@ function seedSalesHistory(products: Record<string, string>, days: number): void 
   const channels = ['chat', 'chat', 'chat', 'mostrador', 'telefono'];
   const serviceTypes = ['local', 'takeaway', 'delivery'];
 
-  for (let dayOffset = days; dayOffset >= 1; dayOffset--) {
+  for (let dayOffset = days; dayOffset >= 0; dayOffset--) {
     const date = new Date();
     date.setDate(date.getDate() - dayOffset);
     const weekday = date.getDay();
@@ -351,10 +351,13 @@ function seedSalesHistory(products: Record<string, string>, days: number): void 
 
     const progress = 1 - dayOffset / days; // 0 = mas viejo, 1 = hoy
     const busy = weekday === 5 || weekday === 6 || weekday === 0 ? 1.6 : 1;
+    // El dia de hoy se corta en la hora actual: no inventamos ventas futuras.
+    const cutoffHour = dayOffset === 0 ? new Date().getHours() : 24;
     const orderCount = Math.round((8 + rand() * 6) * busy);
 
     for (let i = 0; i < orderCount; i++) {
       const hour = rand() < 0.35 ? 12 + Math.floor(rand() * 3) : 20 + Math.floor(rand() * 3);
+      if (hour >= cutoffHour) continue;
       const minute = Math.floor(rand() * 60);
       date.setHours(hour, minute, Math.floor(rand() * 60), 0);
       const createdAt = date.toISOString().slice(0, 19).replace('T', ' ');

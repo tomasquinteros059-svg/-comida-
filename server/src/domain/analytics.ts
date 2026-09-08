@@ -1,4 +1,5 @@
 import { all, get } from '../db/index.js';
+import { parseSqliteDate } from '../lib/text.js';
 
 const SOLD = "o.status IN ('confirmado','en_preparacion','listo','entregado')";
 
@@ -172,7 +173,7 @@ export function menuPerformance(days = 30): MenuItemPerformance[] {
       : profitable ? 'enigma' : 'perro';
 
     const daysSince = row.last_sale
-      ? Math.floor((now - new Date(`${row.last_sale}Z`).getTime()) / 86_400_000)
+      ? Math.floor((now - parseSqliteDate(row.last_sale).getTime()) / 86_400_000)
       : null;
 
     return {
@@ -220,7 +221,10 @@ export function laggingProducts(days = 30): LaggingProduct[] {
           ? `Sin ventas en los ultimos ${days} dias`
           : `Ultima venta hace ${item.days_since_last_sale} dias`,
       );
-    } else if (previous.openDays >= 7 && before >= 0.5 && now < before * 0.6) {
+    }
+
+    const declined = previous.openDays >= 7 && before >= 0.5 && now > 0 && now < before * 0.6;
+    if (declined) {
       const drop = Math.round((1 - now / before) * 100);
       reasons.push(
         `Cayo ${drop}% por dia contra el periodo anterior ` +
@@ -233,7 +237,18 @@ export function laggingProducts(days = 30): LaggingProduct[] {
     }
     if (!item.available) reasons.push('Marcado sin disponibilidad');
 
-    if (reasons.length) lagging.push({ ...item, reason: reasons.join('. ') });
+    if (!reasons.length) continue;
+
+    // Un plato estrella que se cayo no necesita "destacarlo mas": necesita que
+    // alguien averigue que cambio. La recomendacion por clasificacion no sirve.
+    const recommendation = declined
+      ? `Venia vendiendo ${before.toFixed(1)} por dia y ahora ${now.toFixed(1)}. ` +
+        'Revisar que cambio: precio, posicion en la carta, porcion o calidad del insumo.'
+      : item.qty === 0
+        ? 'Sin movimiento: sacarlo de la carta o relanzarlo con una promo.'
+        : item.recommendation;
+
+    lagging.push({ ...item, reason: reasons.join('. '), recommendation });
   }
 
   return lagging.sort((a, b) => a.qty - b.qty || b.margin_cents - a.margin_cents);

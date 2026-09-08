@@ -4,7 +4,7 @@ import { useTempDatabase } from './helpers.js';
 
 useTempDatabase('orders');
 
-const { closeDb, run } = await import('../db/index.js');
+const { closeDb, get, run } = await import('../db/index.js');
 const { createCategory, createProduct } = await import('../domain/menu.js');
 const { advanceOrder, createOrder, priceCart, kitchenTicket } = await import('../domain/orders.js');
 const { createIngredient, getIngredient, checkAvailability } = await import('../domain/stock.js');
@@ -131,5 +131,22 @@ describe('ticket de cocina', () => {
     assert.match(ticket, /3 x Gaseosa/);
     assert.match(ticket, /bien fria/);
     assert.match(ticket, /MESA 7/);
+  });
+
+  it('imprime la hora real del pedido', () => {
+    const order = createOrder({ lines: [{ product_id: soda, qty: 1, modifier_ids: [], note: '' }] });
+    const stored = get<{ created_at: string }>('SELECT created_at FROM orders WHERE id = ?', [order.id])!;
+    // created_at viene de SQLite como "YYYY-MM-DD HH:MM:SS" en UTC.
+    const expected = new Date(`${stored.created_at.replace(' ', 'T')}Z`);
+    const hour = expected.toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    assert.ok(
+      kitchenTicket(order.id).includes(hour),
+      `la comanda deberia mostrar ${hour}`,
+    );
   });
 });

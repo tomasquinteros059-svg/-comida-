@@ -62,3 +62,12 @@ export function similarity(query: string, target: string): number {
   }
   return Math.min(0.8, hits / qTokens.length * 0.8);
 }
+
+/**
+ * Las fechas de SQLite son "YYYY-MM-DD HH:MM:SS" en UTC. Concatenarles una "Z"
+ * sin cambiar el espacio por "T" no es ISO-8601 y los motores lo interpretan
+ * de forma inconsistente, asi que se normaliza siempre por aca.
+ */
+export function parseSqliteDate(value: string): Date {
+  return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`);
+}
