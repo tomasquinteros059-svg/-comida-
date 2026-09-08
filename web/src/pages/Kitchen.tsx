@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useAction } from '../lib/toast';
 import type { Order } from '../lib/types';
 import { Badge, Card, Empty, Modal, Spinner } from '../components/ui';
-import { SERVICE_LABEL, STATUS_LABEL, clock, money, parseDate } from '../lib/format';
+import { SERVICE_LABEL, STATUS_LABEL, money, parseDate, stamp } from '../lib/format';
 
 const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   confirmado: { status: 'en_preparacion', label: 'Empezar' },
@@ -165,7 +165,7 @@ function RecentOrders() {
             {data.map((order) => (
               <tr key={order.id}>
                 <td className="mono">{String(order.daily_number).padStart(3, '0')}</td>
-                <td className="nowrap">{clock(order.created_at)}</td>
+                <td className="nowrap">{stamp(order.created_at)}</td>
                 <td><Badge tone={order.channel === 'chat' ? 'accent' : 'neutral'}>{order.channel}</Badge></td>
                 <td className="small muted">
                   {order.items.map((i) => `${i.qty}× ${i.product_name}`).join(', ') || '—'}

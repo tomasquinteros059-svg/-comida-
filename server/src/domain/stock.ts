@@ -256,6 +256,39 @@ export interface StockAlert {
 }
 
 /**
+ * Severidad de la alerta de un insumo.
+ *
+ * El punto de reposicion que puso el local siempre genera alerta: es una
+ * decision suya y no la pisamos. Pero la severidad se corrige con la cobertura
+ * real, en las dos direcciones:
+ *
+ *   - Algo en el minimo que igual dura una semana no es urgente. Sin este
+ *     ajuste la pantalla se llena de rojos que nadie mira, y el dia que algo
+ *     es urgente de verdad se pierde entre los demas.
+ *   - Algo por encima del minimo que se acaba manana si es urgente, aunque el
+ *     minimo este mal calibrado.
+ */
+export function alertLevel(
+  ingredient: Pick<Ingredient, 'stock_qty' | 'min_qty'>,
+  daysLeft: number | null,
+): AlertLevel | null {
+  if (ingredient.stock_qty <= 0) return 'agotado';
+
+  const byThreshold: AlertLevel | null =
+    ingredient.stock_qty <= ingredient.min_qty
+      ? 'critico'
+      : ingredient.stock_qty <= ingredient.min_qty * 1.5
+        ? 'bajo'
+        : null;
+
+  if (daysLeft === null) return byThreshold;             // sin consumo medido
+  if (daysLeft < 2) return 'critico';                    // se acaba hoy o manana
+  if (byThreshold === 'critico' && daysLeft >= 7) return 'bajo';
+  if (daysLeft < 5 && !byThreshold) return 'bajo';
+  return byThreshold;
+}
+
+/**
  * Calcula el estado de reposicion de cada insumo.
  * `windowDays` es la ventana para estimar el consumo diario.
  */
@@ -265,14 +298,8 @@ export function stockAlerts(windowDays = 14): StockAlert[] {
   const alerts: StockAlert[] = [];
   for (const ingredient of listIngredients()) {
     const daily = usage.get(ingredient.id) ?? 0;
-    const level: AlertLevel | null =
-      ingredient.stock_qty <= 0
-        ? 'agotado'
-        : ingredient.stock_qty <= ingredient.min_qty
-          ? 'critico'
-          : ingredient.stock_qty <= ingredient.min_qty * 1.5
-            ? 'bajo'
-            : null;
+    const daysLeft = daily > 0 ? ingredient.stock_qty / daily : null;
+    const level = alertLevel(ingredient, daysLeft);
     if (!level) continue;
 
     const target = Math.max(ingredient.par_qty, ingredient.min_qty * 2);
@@ -287,7 +314,7 @@ export function stockAlerts(windowDays = 14): StockAlert[] {
       ingredient,
       level,
       daily_usage: Number(daily.toFixed(2)),
-      days_left: daily > 0 ? Number((ingredient.stock_qty / daily).toFixed(1)) : null,
+      days_left: daysLeft === null ? null : Number(daysLeft.toFixed(1)),
       suggested_qty: Number(Math.max(0, target - ingredient.stock_qty).toFixed(2)),
       blocks_products: blocks,
     });

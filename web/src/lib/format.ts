@@ -28,11 +28,33 @@ export function timeAgo(value: string): string {
   return `${Math.floor(hours / 24)} d`;
 }
 
+/**
+ * Hora en 24 h. El formato por defecto de es-AR devuelve "09:47 p. m.", que en
+ * una pantalla de cocina se lee mal; el reloj de un local es siempre 24 h.
+ */
 export const clock = (value: string) =>
-  parseDate(value).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  parseDate(value).toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
 
 export const shortDate = (value: string) =>
   parseDate(value).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+
+export const isToday = (value: string) => {
+  const date = parseDate(value);
+  const now = new Date();
+  return (
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear()
+  );
+};
+
+/** Hora sola si es de hoy; con la fecha si es de otro dia. */
+export const stamp = (value: string) =>
+  isToday(value) ? clock(value) : `${shortDate(value)} ${clock(value)}`;
 
 export const pct = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
 
