@@ -19,6 +19,9 @@
   --accent: #c2410c;
   --accent-soft: #fff1e9;
   --accent-text: #9a3412;
+  /* Texto sobre el color de acento. En claro el acento es oscuro y va blanco;
+     en oscuro el acento es claro y el blanco no contrasta. */
+  --on-accent: #ffffff;
 
   --ok: #15803d;
   --ok-soft: #eaf6ee;
@@ -52,6 +55,7 @@
     --accent: #fb923c;
     --accent-soft: #33220f;
     --accent-text: #fdba74;
+    --on-accent: #241a12;
 
     --ok: #4ade80;
     --ok-soft: #16281c;
@@ -186,6 +190,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
+  /* La tarjeta ocupa el alto de su fila y el cuerpo lo llena: asi un grafico
+     no queda flotando arriba con media tarjeta vacia abajo. */
+  display: flex;
+  flex-direction: column;
 }
 .card-head {
   display: flex;
@@ -195,7 +203,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--border);
 }
 .card-head .spacer { margin-left: auto; }
-.card-body { padding: 16px; }
+.card-body { padding: 16px; flex: 1; }
 .card-body.tight { padding: 0; }
 
 .stat { padding: 16px; }
@@ -270,7 +278,7 @@ tbody tr:hover { background: var(--surface-2); }
 }
 .btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-faint); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
 .btn.danger { color: var(--danger); border-color: var(--danger); }
 .btn.small { padding: 4px 9px; font-size: 0.76rem; }
@@ -326,7 +334,7 @@ tbody tr:hover { background: var(--surface-2); }
   transition: transform 0.15s, background 0.15s;
 }
 .switch[data-on='true'] { background: var(--ok); border-color: var(--ok); }
-.switch[data-on='true']::after { transform: translateX(14px); background: #fff; }
+.switch[data-on='true']::after { transform: translateX(14px); background: var(--surface); }
 
 /* ── Cocina (KDS) ────────────────────────────────────────────────────────── */
 
@@ -395,7 +403,7 @@ tbody tr:hover { background: var(--surface-2); }
   word-break: break-word;
   line-height: 1.45;
 }
-.bubble.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.bubble.user { align-self: flex-end; background: var(--accent); color: var(--on-accent); border-bottom-right-radius: 4px; }
 .bubble.assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .bubble-actions { display: flex; gap: 4px; margin-top: 6px; opacity: 0.55; }
 .bubble-actions:hover { opacity: 1; }
@@ -420,13 +428,23 @@ tbody tr:hover { background: var(--surface-2); }
 
 /* ── Grafico de barras ───────────────────────────────────────────────────── */
 
-.bars { display: flex; align-items: flex-end; gap: 4px; height: 130px; padding-top: 8px; }
-.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.bars { display: flex; align-items: stretch; gap: 4px; height: 100%; min-height: 140px; padding-top: 8px; }
+/* La columna necesita altura definida para que el % de la barra resuelva. */
+.bar-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
 .bar {
   width: 100%;
   background: var(--accent);
   border-radius: 3px 3px 0 0;
-  min-height: 2px;
+  min-height: 3px;
   transition: opacity 0.12s;
 }
 .bar-col:hover .bar { opacity: 0.75; }

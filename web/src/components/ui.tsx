@@ -143,7 +143,7 @@ export function BarChart({
     <div className="bars">
       {data.map((d) => (
         <div className="bar-col" key={d.label} title={`${d.label}: ${format ? format(d.value) : d.value}`}>
-          <div className="bar" style={{ height: `${Math.max(2, (d.value / max) * 100)}%` }} />
+          <div className="bar" style={{ height: `${Math.max(2, (d.value / max) * 88)}%` }} />
           <span className="bar-label">{d.label}</span>
         </div>
       ))}
