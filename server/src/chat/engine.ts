@@ -19,6 +19,11 @@ export interface ChatTurn {
 const MAX_TOOL_ROUNDS = 6;
 /** Cuantos mensajes previos mandamos como contexto. */
 const HISTORY_LIMIT = 20;
+/**
+ * Techo de la respuesta. Las respuestas del bot son de dos o tres frases; el
+ * limite existe para que un error no genere (y cobre) una parrafada.
+ */
+const MAX_TOKENS = 2048;
 
 let client: Anthropic | null = null;
 const anthropic = () => (client ??= new Anthropic({ apiKey: config.anthropicApiKey }));
@@ -55,6 +60,20 @@ interface EngineResult {
   trace: { tool: string; input: unknown; output: unknown }[];
 }
 
+/**
+ * El unico modo de saber si el cache esta funcionando es mirar el uso: si deja
+ * de funcionar no hay error, solo una factura mas alta. Por eso se registra en
+ * cada llamada en vez de confiar en que quedo bien configurado.
+ */
+function logCacheUsage(usage: Anthropic.Usage): void {
+  const read = usage.cache_read_input_tokens ?? 0;
+  const written = usage.cache_creation_input_tokens ?? 0;
+  const fresh = usage.input_tokens;
+  console.log(
+    `[chat] tokens: ${fresh} sin cache · ${written} escritos al cache · ${read} leidos del cache · ${usage.output_tokens} de salida`,
+  );
+}
+
 async function respondWithLLM(conversationId: string): Promise<EngineResult> {
   const history = getMessages(conversationId, HISTORY_LIMIT);
   const messages: Anthropic.MessageParam[] = history.map((m) => ({
@@ -72,13 +91,24 @@ async function respondWithLLM(conversationId: string): Promise<EngineResult> {
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const prompt = buildSystemPrompt(conversationId);
+
       const response = await anthropic().messages.create({
         model: config.chatModel,
-        max_tokens: 1024,
-        system: buildSystemPrompt(conversationId),
+        max_tokens: MAX_TOKENS,
+        // El orden de render es tools -> system -> messages, asi que el punto
+        // de cache al final del bloque estable cachea las herramientas y la
+        // carta juntas. Lo que cambia con cada venta va despues, sin marca.
+        system: [
+          { type: 'text', text: prompt.stable, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: prompt.volatile },
+        ],
+        output_config: { effort: config.chatEffort },
         tools,
         messages,
       });
+
+      logCacheUsage(response.usage);
 
       const toolUses = response.content.filter(
         (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',

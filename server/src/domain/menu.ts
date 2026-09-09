@@ -295,13 +295,23 @@ export function searchProducts(query: string, limit = 6): ProductMatch[] {
  * para que el prompt no ofrezca algo que otro carrito ya tiene comprometido.
  */
 export function menuAsText(
-  options: { includeUnavailable?: boolean; orderable?: Map<string, boolean> } = {},
+  options: {
+    includeUnavailable?: boolean;
+    orderable?: Map<string, boolean>;
+    /**
+     * Cuando es false, la carta no dice que hay y que no. Sirve para el prefijo
+     * cacheado del prompt: la disponibilidad cambia con cada venta, y si
+     * estuviera aca adentro invalidaria el cache de la carta entera.
+     */
+    showAvailability?: boolean;
+  } = {},
 ): string {
   const products = listProducts({ onlyActive: true });
   const categories = listCategories();
   const lines: string[] = [];
 
   const isAvailable = (p: Product) => options.orderable?.get(p.id) ?? p.available;
+  const showAvailability = options.showAvailability !== false;
 
   const groups = new Map<string, Product[]>();
   for (const p of products) {
@@ -319,7 +329,7 @@ export function menuAsText(
     for (const p of items) {
       const price = (p.price_cents / 100).toFixed(2);
       const flags = [
-        !isAvailable(p) ? 'SIN STOCK' : null,
+        showAvailability && !isAvailable(p) ? 'SIN STOCK' : null,
         p.tags.length ? p.tags.join('/') : null,
         p.allergens.length ? `contiene: ${p.allergens.join(', ')}` : null,
       ].filter(Boolean);

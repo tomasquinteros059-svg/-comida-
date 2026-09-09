@@ -17,7 +17,13 @@ export const config = {
   projectRoot,
   databasePath: resolveFromRoot(process.env.DATABASE_PATH ?? './data/comeia.db'),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || '',
-  chatModel: process.env.CHAT_MODEL?.trim() || 'claude-sonnet-5',
+  chatModel: process.env.CHAT_MODEL?.trim() || 'claude-opus-5',
+  /**
+   * Cuanto "piensa" el modelo antes de responder. Tomar un pedido es una tarea
+   * simple y el cliente esta esperando: "low" responde mas rapido y mas barato,
+   * y para esto alcanza. Subilo si el local tiene una carta muy enredada.
+   */
+  chatEffort: (process.env.CHAT_EFFORT?.trim() || 'low') as 'low' | 'medium' | 'high' | 'xhigh' | 'max',
   adminToken: process.env.ADMIN_TOKEN?.trim() || '',
   /**
    * Origenes que pueden llamar a la API desde otro dominio. Vacio = solo el

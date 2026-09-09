@@ -19,6 +19,53 @@ plata en el modelo.
 
 ---
 
+## Cuánto cuesta el chatbot
+
+El prompt de un local se reenvía en cada llamada al modelo, así que es lo que
+más pesa en la factura. En el local de ejemplo mide **2.416 tokens** (las
+herramientas del bot más las reglas y la carta).
+
+Ese bloque va **cacheado**: se cobra entero la primera vez y a un décimo del
+precio en las llamadas siguientes. Por eso la carta cacheada no lleva las
+marcas de stock — van aparte, después del punto de caché, para que una venta no
+invalide el prefijo entero.
+
+Un pedido típico son unas 10 llamadas al modelo (cinco mensajes del cliente,
+más la vuelta de cada herramienta):
+
+| Modelo | Por pedido | 300 pedidos/mes | 900 pedidos/mes |
+| --- | ---: | ---: | ---: |
+| Sin clave (determinista) | $0 | $0 | $0 |
+| `claude-sonnet-5` | ~$0,037 | ~$11 | ~$33 |
+| `claude-opus-5` | ~$0,093 | ~$28 | ~$84 |
+
+Tres cosas que conviene saber antes de elegir:
+
+- **El caché baja la cuenta a la mitad.** Sin él, Opus 5 sale ~$0,19 por pedido
+  en vez de ~$0,09. Ya viene puesto; lo que hay que hacer es no romperlo.
+- **Haiku no conviene acá.** Es el más barato por token, pero necesita un
+  prefijo de 4.096 tokens para cachear y el de un local ronda los 2.400: no
+  cachea nunca. Termina costando lo mismo que Sonnet 5 (~$0,038 por pedido)
+  siendo un modelo bastante peor. No es una buena compra.
+- **Son estimaciones.** Salen de medir el prompt real y contar ~3,5 caracteres
+  por token. El número exacto lo da `messages.count_tokens`, y el gasto real
+  está en la consola de Anthropic. Los logs del contenedor imprimen los tokens
+  de cada llamada:
+
+```
+[chat] tokens: 620 sin cache · 0 escritos al cache · 2416 leidos del cache · 143 de salida
+```
+
+Si "leidos del cache" queda en cero llamada tras llamada, el caché se rompió y
+la factura sube sin que nada avise. Es lo primero que hay que mirar después de
+tocar la carta o el prompt.
+
+**Una forma sensata de arrancar:** sin clave, con el motor determinista. Toma
+pedidos, entiende cantidades y aguanta errores de tipeo. Cuando veas que el
+local lo usa, poné la clave — es cambiar una línea del `.env` y reiniciar.
+
+---
+
 ## Opción A — Docker en un VPS (la recomendada)
 
 Es un servicio, un volumen y un proxy que resuelve el HTTPS solo.
@@ -55,22 +102,23 @@ proxy del paso siguiente.
 
 ### 3. HTTPS con Caddy
 
-Caddy saca y renueva el certificado solo. En el servidor, `/etc/caddy/Caddyfile`:
-
-```
-pedidos.tulocal.com.ar {
-    encode gzip
-    reverse_proxy 127.0.0.1:3000
-}
-```
+Caddy saca y renueva el certificado solo, sin cron ni certbot. La configuración
+está lista en `deploy/Caddyfile`: cambiá el dominio y copiala.
 
 ```bash
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile        # poner tu dominio en la primera línea
+sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
 
-Apuntá el registro `A` del dominio a la IP del servidor y listo. Con nginx el
-equivalente es un `proxy_pass` más `certbot`; lo único que no puede faltar es
-que el proxy mande `X-Forwarded-For` y `X-Forwarded-Proto` (Caddy lo hace solo).
+**Apuntá el registro `A` del dominio a la IP del servidor antes de recargar**, o
+la validación del certificado falla y hay que esperar para reintentar.
+
+Con nginx el equivalente es un `proxy_pass` más `certbot`. Lo único que no puede
+faltar en ningún caso: que el proxy mande `X-Forwarded-For` y
+`X-Forwarded-Proto`, y que no bufferee la respuesta (el panel usa un stream para
+enterarse de los cambios de stock al instante).
 
 ### 4. Primer arranque
 
@@ -92,33 +140,16 @@ docker compose exec comeia node server/dist/db/seed.js
 npm ci && npm run build
 ```
 
-`/etc/systemd/system/comeia.service`:
-
-```ini
-[Unit]
-Description=comeIA
-After=network.target
-
-[Service]
-Type=simple
-User=comeia
-WorkingDirectory=/opt/comeia
-EnvironmentFile=/opt/comeia/.env
-Environment=NODE_ENV=production
-ExecStart=/usr/bin/node server/dist/index.js
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
+La unidad está en `deploy/comeia.service`:
 
 ```bash
-sudo systemctl enable --now comeia
+sudo cp deploy/comeia.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now comeia
 ```
 
 `Restart=always` más el cierre ordenado que ya hace el proceso (SIGTERM cierra
-SQLite dejando el WAL consolidado) alcanzan para que sobreviva a un reinicio.
+SQLite dejando el WAL consolidado) alcanzan para que sobreviva a un reinicio. La
+unidad además restringe el proceso a escribir solo su carpeta de datos.
 
 ---
 
@@ -142,20 +173,37 @@ no duplica la capacidad: duplica las bases, cada una con la mitad de los pedidos
 
 ## Backups
 
-Toda la operación del local es un archivo. Copiarlo es el backup:
+Toda la operación del local es un archivo. Copiarlo es el backup entero, y el
+script ya está hecho:
 
 ```bash
-# Copia consistente aunque el sistema esté funcionando
-docker compose exec comeia \
-  node -e "const D=require('better-sqlite3');new D(process.env.DATABASE_PATH).backup('/app/data/backup.db').then(()=>process.exit(0))"
-docker compose cp comeia:/app/data/backup.db ./backup-$(date +%F).db
+./deploy/backup.sh                      # guarda en ./backups
+./deploy/backup.sh /mnt/backups         # o donde quieras
+RETENCION_DIAS=30 ./deploy/backup.sh    # guardar un mes
 ```
 
-Ponelo en un cron diario y mandá la copia afuera del servidor. **Un backup que
-vive en el mismo disco que la base no es un backup.**
+Usa la API de backup de SQLite en vez de `cp`: copiar el archivo mientras el
+local está vendiendo puede dejar una base a medio camino que **parece sana y no
+lo está**. Después verifica la copia (`integrity_check` y un conteo de pedidos)
+antes de darla por buena, y recién entonces borra las viejas.
+
+En cron, todas las madrugadas:
+
+```cron
+0 4 * * * cd /opt/comeia && ./deploy/backup.sh >> /var/log/comeia-backup.log 2>&1
+```
+
+**Un backup que vive en el mismo disco que la base no es un backup.** Sincronizá
+la carpeta afuera del servidor (`rclone`, `scp`, S3).
 
 Restaurar es copiar el archivo de vuelta a `/app/data/comeia.db` con el servicio
-apagado.
+apagado:
+
+```bash
+docker compose down
+docker compose cp ./backups/comeia-2026-09-09_0400.db comeia:/app/data/comeia.db
+docker compose up -d
+```
 
 ---
 

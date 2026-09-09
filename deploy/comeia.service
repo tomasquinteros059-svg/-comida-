@@ -1,0 +1,41 @@
+# comeIA sin Docker, con systemd.
+#
+#   sudo cp deploy/comeia.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now comeia
+#
+# Para la opción con Docker esto no hace falta: compose ya reinicia solo.
+
+[Unit]
+Description=comeIA — pedidos y gestion del local
+After=network.target
+
+[Service]
+Type=simple
+User=comeia
+Group=comeia
+WorkingDirectory=/opt/comeia
+EnvironmentFile=/opt/comeia/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node server/dist/index.js
+
+Restart=always
+RestartSec=5
+
+# systemd manda SIGTERM, que el proceso atiende para cerrar SQLite dejando el
+# WAL consolidado. El plazo tiene que alcanzar para eso.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# El proceso solo necesita escribir su base: todo lo demás, de solo lectura.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/comeia/data
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=comeia
+
+[Install]
+WantedBy=multi-user.target

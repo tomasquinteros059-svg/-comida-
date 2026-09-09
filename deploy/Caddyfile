@@ -1,0 +1,48 @@
+# comeIA — proxy con HTTPS automático.
+#
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy saca y renueva el certificado de Let's Encrypt solo, sin cron ni
+# certbot. Lo único que hace falta es que el registro A del dominio apunte a
+# la IP del servidor ANTES de recargar: si no, la validación falla.
+
+pedidos.tulocal.com.ar {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		# El límite del chat cuenta por IP. Sin estas cabeceras, todas las
+		# consultas parecen venir del proxy y el límite se aplica a todo el
+		# local junto. Van con TRUST_PROXY=1 en el .env.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# El chat es un stream: sin esto, el panel se entera de los cambios de
+		# stock recién cuando el buffer se llena.
+		flush_interval -1
+	}
+
+	# El panel es de uso interno del local: no tiene por qué estar indexado.
+	header /* {
+		X-Robots-Tag "noindex, nofollow"
+	}
+
+	log {
+		output file /var/log/caddy/comeia.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}
+
+# ── Si además querés servir el chat embebido en el sitio del local ───────────
+# Descomentá y agregá ese dominio a ALLOWED_ORIGINS en el .env, o el navegador
+# va a bloquear las llamadas por CORS.
+#
+# tulocal.com.ar {
+# 	root * /var/www/tulocal
+# 	file_server
+# 	handle /api/chat* {
+# 		reverse_proxy 127.0.0.1:3000
+# 	}
+# }
