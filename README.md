@@ -24,10 +24,13 @@ npm run dev           # servidor en :3000, panel en :5173
 Abrí <http://localhost:5173>. El panel habla con el servidor por proxy, así que
 alcanza con esa URL.
 
-Para producción:
+Para producción, la guía completa está en **[DEPLOY.md](DEPLOY.md)**: Docker,
+HTTPS, backups y qué conviene saber antes de abrirlo al público. La versión
+corta:
 
 ```bash
-npm run build && npm start   # todo servido desde :3000
+cp .env.example .env         # completar ADMIN_TOKEN
+docker compose up -d --build
 ```
 
 > Si venías de una instalación anterior con la base en `data/comeya.db`,

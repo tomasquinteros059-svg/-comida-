@@ -1,0 +1,42 @@
+# comeIA — la forma mas simple de tenerlo andando en un servidor.
+#
+#   cp .env.example .env      y completar ADMIN_TOKEN (y ANTHROPIC_API_KEY)
+#   docker compose up -d --build
+#   docker compose exec comeia node server/dist/db/seed.js   # solo la 1a vez
+#
+services:
+  comeia:
+    build: .
+    restart: unless-stopped
+    ports:
+      # Solo en localhost: el que mira a internet es el proxy con HTTPS.
+      # Para probar sin proxy, cambiar por "3000:3000".
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_PATH: /app/data/comeia.db
+      # Obligatorio en produccion: sin esto el proceso no arranca.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?falta ADMIN_TOKEN, generalo con: openssl rand -base64 32}
+      # Opcional: sin clave el bot usa el motor determinista.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CHAT_MODEL: ${CHAT_MODEL:-claude-sonnet-5}
+      CURRENCY: ${CURRENCY:-ARS}
+      TIMEZONE: ${TIMEZONE:-America/Argentina/Buenos_Aires}
+      # 1 = hay un proxy adelante (nginx, Caddy, Traefik) y su X-Forwarded-For
+      # es confiable. En 0 el limite de pedidos contaria la IP del proxy.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    volumes:
+      # Aca viven las ventas del local. Sin este volumen, cada redeploy
+      # empieza de cero.
+      - comeia-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  comeia-data:

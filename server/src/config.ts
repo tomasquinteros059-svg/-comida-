@@ -19,9 +19,53 @@ export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || '',
   chatModel: process.env.CHAT_MODEL?.trim() || 'claude-sonnet-5',
   adminToken: process.env.ADMIN_TOKEN?.trim() || '',
+  /**
+   * Origenes que pueden llamar a la API desde otro dominio. Vacio = solo el
+   * mismo origen, que es lo que corresponde cuando el panel se sirve desde
+   * este mismo proceso.
+   */
+  allowedOrigins: (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  /**
+   * Saltos de proxy en los que confiar para leer la IP real (X-Forwarded-For).
+   * Detras de un nginx o un Caddy es 1. Dejarlo en 0 cuando el proceso mira a
+   * internet directo: si no, cualquiera falsea su IP y esquiva el limite.
+   */
+  trustProxy: Number(process.env.TRUST_PROXY ?? 0),
+  chatRateLimit: {
+    windowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 60_000),
+    max: Number(process.env.CHAT_RATE_MAX ?? 20),
+  },
   currency: process.env.CURRENCY ?? 'ARS',
   timezone: process.env.TIMEZONE ?? 'America/Argentina/Buenos_Aires',
 };
 
 /** Si no hay clave, el chatbot usa el motor determinista (reglas + fuzzy match). */
 export const hasLLM = () => config.anthropicApiKey.length > 0;
+
+export const isProduction = () => config.env === 'production';
+
+/**
+ * Revisa la configuracion antes de aceptar trafico. Devuelve los problemas
+ * que impiden arrancar en produccion.
+ *
+ * El caso que importa: sin ADMIN_TOKEN el panel queda abierto. En una notebook
+ * eso es comodo; en internet significa que cualquiera edita la carta, ve la
+ * facturacion y le manda ordenes de compra a los proveedores del local.
+ */
+export function configProblems(): string[] {
+  const problems: string[] = [];
+  if (!isProduction()) return problems;
+
+  if (!config.adminToken) {
+    problems.push(
+      'Falta ADMIN_TOKEN. Sin el, el panel de administracion queda abierto a ' +
+        'cualquiera que conozca la URL. Genera uno con: openssl rand -base64 32',
+    );
+  } else if (config.adminToken.length < 16) {
+    problems.push('ADMIN_TOKEN es muy corto: usa al menos 16 caracteres.');
+  }
+  return problems;
+}

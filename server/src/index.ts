@@ -3,8 +3,9 @@ import cors from 'cors';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config, hasLLM } from './config.js';
-import { db } from './db/index.js';
+import { config, configProblems, hasLLM, isProduction } from './config.js';
+import { closeDb, db } from './db/index.js';
+import { rateLimit } from './lib/rateLimit.js';
 import { errorHandler, HttpError } from './lib/http.js';
 import { chatRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
@@ -21,7 +22,13 @@ export function createApp() {
   db(); // crea el archivo y aplica el esquema en el arranque
 
   const app = express();
-  app.use(cors());
+
+  // Detras de un proxy, req.ip tiene que ser la IP real del cliente o el
+  // limite de pedidos se aplica a la del proxy y no sirve para nada.
+  if (config.trustProxy > 0) app.set('trust proxy', config.trustProxy);
+
+  app.use(securityHeaders);
+  app.use(corsPolicy());
   // El limite alto es para la ingesta de planillas; la valida su propia ruta.
   app.use(express.json({ limit: '4mb' }));
 
@@ -35,7 +42,15 @@ export function createApp() {
   });
 
   // El chat es publico (lo usa el cliente final); el resto es del local.
-  app.use('/api/chat', chatRouter);
+  // Va con limite: cada turno puede costar una llamada al modelo.
+  app.use(
+    '/api/chat',
+    rateLimit({
+      ...config.chatRateLimit,
+      message: 'Estas escribiendo muy rapido. Espera unos segundos y volve a intentar.',
+    }),
+    chatRouter,
+  );
 
   // Stream de cambios del local: el panel y el chat se enteran al instante de
   // un movimiento de stock en vez de esperar al proximo refresco.
@@ -64,6 +79,36 @@ export function createApp() {
   return app;
 }
 
+/**
+ * Cabeceras de seguridad. Se escriben a mano en vez de traer una dependencia:
+ * son cuatro, y asi queda a la vista que hace cada una.
+ */
+function securityHeaders(_req: express.Request, res: express.Response, next: express.NextFunction) {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',        // no adivinar el tipo de un archivo
+    'X-Frame-Options': 'SAMEORIGIN',            // no embeber el panel en otro sitio
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+  });
+  // HSTS solo detras de HTTPS: activarlo sobre HTTP deja al navegador sin poder
+  // volver a entrar.
+  if (isProduction() && _req.secure) {
+    res.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  next();
+}
+
+/**
+ * En produccion, CORS solo para los origenes declarados. El panel se sirve
+ * desde este mismo proceso, asi que lo normal es no necesitar ninguno; la
+ * lista existe para cuando el chat se embebe en el sitio del local.
+ */
+function corsPolicy() {
+  if (!isProduction()) return cors();
+  if (!config.allowedOrigins.length) return cors({ origin: false });
+  return cors({ origin: config.allowedOrigins, credentials: false });
+}
+
 /** Igual que requireAdmin, pero acepta el token por query string (SSE). */
 function requireAdminStream(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!config.adminToken) return next();
@@ -82,10 +127,40 @@ function requireAdmin(req: express.Request, _res: express.Response, next: expres
 
 const isMain = process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`;
 if (isMain) {
+  // Mejor no arrancar que arrancar abierto: un panel sin token en internet se
+  // encuentra solo, y para cuando alguien lo nota ya edito la carta.
+  const problems = configProblems();
+  if (problems.length) {
+    console.error('\nNo puedo arrancar en produccion con esta configuracion:\n');
+    for (const problem of problems) console.error(`  · ${problem}`);
+    console.error('');
+    process.exit(1);
+  }
+
   const app = createApp();
-  app.listen(config.port, () => {
-    console.log(`comeIA escuchando en http://localhost:${config.port}`);
+  const server = app.listen(config.port, () => {
+    console.log(`comeIA escuchando en el puerto ${config.port}`);
+    console.log(`  entorno:       ${config.env}`);
     console.log(`  motor de chat: ${hasLLM() ? `LLM (${config.chatModel})` : 'deterministico (sin ANTHROPIC_API_KEY)'}`);
     console.log(`  base de datos: ${config.databasePath}`);
+    console.log(`  panel:         ${config.adminToken ? 'protegido con token' : 'ABIERTO (solo desarrollo)'}`);
   });
+
+  // SQLite en modo WAL necesita cerrar bien para dejar el checkpoint hecho.
+  // Sin esto, un redeploy puede dejar el .db-wal colgado.
+  const shutdown = (signal: string) => {
+    console.log(`\n${signal}: cerrando...`);
+    server.close(() => {
+      closeDb();
+      process.exit(0);
+    });
+    // Si alguna conexion no cierra (el stream SSE queda abierto), no esperamos
+    // para siempre.
+    setTimeout(() => {
+      closeDb();
+      process.exit(0);
+    }, 5_000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
