@@ -144,6 +144,9 @@ server/src/
 ├─ routes/      capa HTTP delgada sobre domain/
 └─ lib/         ids, dinero, texto, errores
 
+server/scripts/
+└─ export-demo.ts   vuelca el local de ejemplo a un JSON autocontenido
+
 web/src/
 ├─ pages/       Panel, Cocina, Chatbot, Carta, Stock, Compras, Entrenar al bot
 ├─ components/  primitivas de UI
@@ -208,6 +211,23 @@ Cada archivo corre contra su propia base efímera.
 | `GET/POST/PATCH` | `/api/knowledge` | Lo que el local le enseña al bot. |
 
 Con `ADMIN_TOKEN` seteado, todo salvo `/api/chat` y `/api/health` pide el token.
+
+---
+
+## Demo
+
+`server/scripts/export-demo.ts` vuelca la carta, los insumos, los proveedores y
+las métricas del local de ejemplo a un JSON autocontenido, para poder mostrar el
+producto sin levantar el servidor:
+
+```bash
+npx tsx server/scripts/export-demo.ts demo-data.json
+```
+
+Queda fuera de `src/`, así que no entra en el build ni en el bundle del servidor.
+El servicio se exporta en minutos antes del cierre en vez de fechas absolutas, de
+modo que quien abra la demo siempre vea un servicio en curso con los relojes de
+las comandas coherentes.
 
 ---
 
