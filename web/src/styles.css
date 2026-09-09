@@ -548,18 +548,62 @@ tbody tr:hover { background: var(--surface-2); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Telefono ───────────────────────────────────────────────────────────
+   El mismo panel, no una version recortada: cambia la densidad, no el
+   contenido. La navegacion pasa a una fila que se desliza, y todo lo ancho
+   (tablas, comandas) scrollea dentro de su caja en vez de estirar la pagina. */
 @media (max-width: 760px) {
   .app { flex-direction: column; }
+
   .sidebar {
     width: 100%;
     height: auto;
     position: static;
     flex-direction: row;
     overflow-x: auto;
-    padding: 10px;
-    gap: 2px;
+    padding: 7px 10px;
+    gap: 4px;
+    scrollbar-width: none;
+    /* El degradado del borde derecho avisa que la fila sigue. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
   }
+  .sidebar::-webkit-scrollbar { display: none; }
   .brand, .nav-section { display: none; }
-  .nav-item { width: auto; }
-  .content { padding: 14px; }
+  .nav-item { width: auto; flex: 0 0 auto; padding: 7px 11px; }
+
+  .topbar { padding: 11px 14px; gap: 8px; flex-wrap: wrap; }
+  .topbar h1 { font-size: 1.15rem; }
+  .topbar-actions { margin-left: 0; flex-basis: 100%; }
+
+  .content { padding: 13px 13px 40px; }
+  .grid { gap: 10px; }
+
+  /* Dos tarjetas por fila: cuatro numeros apilados son cuatro pantallazos. */
+  .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat { padding: 12px; }
+  .stat-value { font-size: 1.3rem; }
+  .stat-label { font-size: 0.66rem; }
+
+  .card-head { flex-wrap: wrap; padding: 10px 13px; }
+  .card-head .spacer { margin-left: 0; flex-basis: 100%; }
+  .card-body { padding: 13px; }
+
+  .kds { grid-template-columns: 1fr; }
+  .chat-log { height: 46vh; min-height: 240px; }
+  .chat-form { padding: 10px 13px; }
+
+  th, td { padding: 9px 12px; }
+  .bars { min-height: 118px; }
+  .dropzone { padding: 18px 14px; }
+  .toast-tray { left: 12px; right: 12px; bottom: 12px; }
+  .toast { max-width: none; }
+  .modal-backdrop { padding: 12px; align-items: flex-end; }
+  .modal { max-height: 90vh; }
+}
+
+/* Pantallas muy angostas: los numeros vuelven a una columna antes de
+   partirse a la mitad. */
+@media (max-width: 380px) {
+  .grid.cols-4 { grid-template-columns: 1fr; }
 }
