@@ -1,4 +1,4 @@
-# comeya
+# comeIA
 
 Plataforma para locales de comida. Tres piezas que comparten una sola base de datos:
 
@@ -30,6 +30,10 @@ Para producción:
 npm run build && npm start   # todo servido desde :3000
 ```
 
+> Si venías de una instalación anterior con la base en `data/comeya.db`,
+> renombrá el archivo a `data/comeia.db` (o apuntá `DATABASE_PATH` al viejo).
+> El esquema no cambió: solo cambió el nombre.
+
 ### Configuración
 
 Copiá `.env.example` a `.env`. Todo tiene valor por defecto salvo la clave del
@@ -39,7 +43,7 @@ modelo:
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Activa el chatbot con Claude. Sin ella funciona el motor determinista. |
 | `CHAT_MODEL` | Modelo a usar (por defecto `claude-sonnet-5`). |
-| `DATABASE_PATH` | Archivo SQLite. Relativo a la raíz del proyecto. |
+| `DATABASE_PATH` | Archivo SQLite. Relativo a la raíz del proyecto (por defecto `data/comeia.db`). |
 | `ADMIN_TOKEN` | Si está seteado, las rutas del panel piden `Authorization: Bearer <token>`. |
 | `CURRENCY`, `TIMEZONE` | Formato de importes y horarios del local. |
 

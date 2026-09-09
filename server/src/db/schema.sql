@@ -1,5 +1,5 @@
 -- =============================================================================
--- comeya — esquema de base de datos
+-- comeIA — esquema de base de datos
 --
 -- Convenciones:
 --   * Todo el dinero se guarda en centavos (INTEGER). Nunca floats.

@@ -60,7 +60,7 @@ export function App() {
       <nav className="sidebar">
         <div className="brand">
           <span className="brand-name">
-            come<span className="brand-dot">ya</span>
+            come<span className="brand-accent">IA</span>
           </span>
           <span className="brand-sub">panel</span>
         </div>

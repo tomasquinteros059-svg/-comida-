@@ -1,6 +1,6 @@
 /** Cliente HTTP unico. Centraliza el token del panel y el formato de error. */
 
-const ADMIN_TOKEN_KEY = 'comeya.adminToken';
+const ADMIN_TOKEN_KEY = 'comeia.adminToken';
 
 export const getAdminToken = () => localStorage.getItem(ADMIN_TOKEN_KEY) ?? '';
 export const setAdminToken = (token: string) => localStorage.setItem(ADMIN_TOKEN_KEY, token);

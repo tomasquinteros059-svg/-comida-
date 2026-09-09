@@ -84,7 +84,7 @@ const isMain = process.argv[1] && import.meta.url === `file://${path.resolve(pro
 if (isMain) {
   const app = createApp();
   app.listen(config.port, () => {
-    console.log(`comeya escuchando en http://localhost:${config.port}`);
+    console.log(`comeIA escuchando en http://localhost:${config.port}`);
     console.log(`  motor de chat: ${hasLLM() ? `LLM (${config.chatModel})` : 'deterministico (sin ANTHROPIC_API_KEY)'}`);
     console.log(`  base de datos: ${config.databasePath}`);
   });

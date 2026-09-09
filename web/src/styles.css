@@ -1,5 +1,5 @@
 /* =============================================================================
-   comeya — hoja de estilos unica.
+   comeIA — hoja de estilos unica.
    Los colores se definen como tokens en :root y se redefinen para tema oscuro.
    ========================================================================== */
 
@@ -117,7 +117,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 0 10px 16px;
 }
 .brand-name { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
-.brand-dot { color: var(--accent); }
+.brand-accent { color: var(--accent); }
 .brand-sub { font-size: 0.68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em; }
 
 .nav-item {

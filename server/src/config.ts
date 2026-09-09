@@ -15,7 +15,7 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   env: process.env.NODE_ENV ?? 'development',
   projectRoot,
-  databasePath: resolveFromRoot(process.env.DATABASE_PATH ?? './data/comeya.db'),
+  databasePath: resolveFromRoot(process.env.DATABASE_PATH ?? './data/comeia.db'),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || '',
   chatModel: process.env.CHAT_MODEL?.trim() || 'claude-sonnet-5',
   adminToken: process.env.ADMIN_TOKEN?.trim() || '',
