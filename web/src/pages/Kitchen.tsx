@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '../lib/useApi';
+import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction } from '../lib/toast';
 import type { Order } from '../lib/types';
@@ -19,6 +20,7 @@ const elapsedMinutes = (order: Order) =>
 export function KitchenPage() {
   const { data, loading, error, reload } = useApi<Order[]>('/orders/kitchen', 8_000);
   const run = useAction();
+  useLive(['pedido'], () => void reload());
   const [ticket, setTicket] = useState<{ code: string; text: string } | null>(null);
   const [, forceTick] = useState(0);
 

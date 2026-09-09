@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { newId, shortCode } from '../lib/ids.js';
 import { badRequest, conflict, notFound } from '../lib/http.js';
 import { parseSqliteDate } from '../lib/text.js';
+import { emit } from '../lib/events.js';
 import { assertProductOrderable, getModifiers } from './menu.js';
 import { checkAvailability, consumeForOrder, restoreForOrder, syncProductAvailability } from './stock.js';
 import type { CartLine, OrderStatus, PricedLine, ServiceType } from './types.js';
@@ -68,7 +69,7 @@ export function priceCart(lines: CartLine[]): { lines: PricedLine[]; subtotal_ce
 
   for (const line of lines) {
     if (!Number.isInteger(line.qty) || line.qty <= 0) {
-      throw badRequest(`Cantidad invalida para el producto ${line.product_id}`);
+      throw badRequest(`Cantidad inválida para el producto ${line.product_id}`);
     }
     const product = assertProductOrderable(line.product_id);
     const modifiers = getModifiers(line.modifier_ids ?? []).map((m) => ({
@@ -210,7 +211,10 @@ export function createOrder(input: CreateOrderInput): Order {
   }
 
   if (input.confirm) {
-    const check = checkAvailability(input.lines);
+    // Confirmar compite contra el stock real, no contra las reservas: el
+    // carrito de al lado puede no confirmarse nunca, y el primero que cierra
+    // se lo lleva, igual que en el mostrador.
+    const check = checkAvailability(input.lines, { ignoreReservations: true });
     if (!check.ok) {
       throw conflict('No alcanza el stock de insumos', {
         faltantes: check.shortages.map((s) => ({
@@ -278,6 +282,7 @@ export function createOrder(input: CreateOrderInput): Order {
     syncProductAvailability();
   }
 
+  emit('pedido', `nuevo ${code}`);
   return getOrderOrThrow(id);
 }
 
@@ -342,6 +347,7 @@ export function advanceOrder(
         modifier_ids: i.modifiers.map((m) => m.id),
         note: i.note,
       })),
+      { ignoreReservations: true },
     );
     if (!check.ok) {
       // Revertimos: el pedido no puede pasar a cocina sin insumos.
@@ -367,6 +373,7 @@ export function advanceOrder(
     syncProductAvailability();
   }
 
+  emit('pedido', `${order.code} ${next}`);
   return getOrderOrThrow(orderId);
 }
 

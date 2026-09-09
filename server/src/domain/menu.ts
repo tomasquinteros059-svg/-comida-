@@ -1,6 +1,7 @@
 import { all, get, jsonParse, run, toDbBool, transaction } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { badRequest, notFound } from '../lib/http.js';
+import { emit } from '../lib/events.js';
 import { similarity } from '../lib/text.js';
 import type { Category, Modifier, ModifierGroup, Product } from './types.js';
 
@@ -194,6 +195,7 @@ export function updateProduct(id: string, patch: Partial<ProductInput>): Product
       id,
     ],
   );
+  emit('carta', next.name);
   return getProductOrThrow(id);
 }
 
@@ -287,15 +289,23 @@ export function searchProducts(query: string, limit = 6): ProductMatch[] {
     .slice(0, limit);
 }
 
-/** Vuelca la carta a texto plano: es el contexto que recibe el modelo. */
-export function menuAsText(options: { includeUnavailable?: boolean } = {}): string {
+/**
+ * Vuelca la carta a texto plano: es el contexto que recibe el modelo.
+ * `orderable` permite pasar la disponibilidad real del momento (stock libre),
+ * para que el prompt no ofrezca algo que otro carrito ya tiene comprometido.
+ */
+export function menuAsText(
+  options: { includeUnavailable?: boolean; orderable?: Map<string, boolean> } = {},
+): string {
   const products = listProducts({ onlyActive: true });
   const categories = listCategories();
   const lines: string[] = [];
 
+  const isAvailable = (p: Product) => options.orderable?.get(p.id) ?? p.available;
+
   const groups = new Map<string, Product[]>();
   for (const p of products) {
-    if (!p.available && !options.includeUnavailable) continue;
+    if (!isAvailable(p) && !options.includeUnavailable) continue;
     const key = p.category_name ?? 'Otros';
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(p);
@@ -309,7 +319,7 @@ export function menuAsText(options: { includeUnavailable?: boolean } = {}): stri
     for (const p of items) {
       const price = (p.price_cents / 100).toFixed(2);
       const flags = [
-        !p.available ? 'SIN STOCK' : null,
+        !isAvailable(p) ? 'SIN STOCK' : null,
         p.tags.length ? p.tags.join('/') : null,
         p.allergens.length ? `contiene: ${p.allergens.join(', ')}` : null,
       ].filter(Boolean);
@@ -332,6 +342,6 @@ export function menuAsText(options: { includeUnavailable?: boolean } = {}): stri
 export function assertProductOrderable(productId: string): Product {
   const product = getProduct(productId);
   if (!product) throw notFound(`Producto ${productId}`);
-  if (!product.active) throw badRequest(`${product.name} no esta en la carta`);
+  if (!product.active) throw badRequest(`${product.name} no está en la carta`);
   return product;
 }

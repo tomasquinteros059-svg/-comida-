@@ -64,12 +64,57 @@ Tres decisiones que sostienen todo esto:
 
 - **Los precios nunca salen del modelo.** El carrito guarda `product_id` y
   cantidad; el importe se calcula contra la carta vigente al confirmar.
-- **El prompt se rearma en cada turno**, así que un cambio de precio en el panel
-  llega al bot en el mensaje siguiente, sin reiniciar nada.
+- **El prompt se rearma en cada turno** con la carta y el stock del momento, así
+  que un cambio hecho en el panel mientras el cliente escribe llega al bot en el
+  mensaje siguiente, sin reiniciar nada.
 - **Sin `ANTHROPIC_API_KEY` el sistema igual funciona.** Un motor determinista
   (reglas + coincidencia difusa) resuelve pedir, ver el total, sacar un ítem y
   confirmar. Sirve para demostrar el sistema sin red y para que los tests corran
   contra la lógica real de pedido, no contra un mock.
+
+### El bot no puede vender lo que no hay
+
+Tres mecanismos encadenados, del más lento al más fino:
+
+1. **La carta se recalcula sola.** Si el stock no alcanza para la receta de un
+   plato, el plato deja de estar disponible y el bot deja de ofrecerlo.
+2. **Los carritos abiertos reservan.** Dos clientes chateando a la vez no pueden
+   llevarse las mismas últimas unidades: mientras una conversación tiene algo en
+   el carrito, esos insumos no están libres para las demás. La reserva se suelta
+   sola a los 15 minutos, así que un chat abandonado no congela el stock.
+   Al confirmar la comprobación se hace contra el stock real y no contra las
+   reservas: el carrito de al lado puede no cerrarse nunca, y el primero que
+   confirma se lo lleva, igual que en el mostrador.
+3. **Los cambios se avisan en vivo.** `GET /api/events` es un stream SSE que
+   emite cada movimiento de stock, cambio de carta o pedido nuevo. El panel y la
+   consola del chat se actualizan en el momento en que pasa, sin esperar al
+   próximo refresco.
+
+---
+
+## Subir información al bot
+
+El botón **Subir información**, en la pantalla del chatbot, toma un archivo y lo
+convierte en datos del local. Reconoce solo por las columnas de qué se trata:
+
+| Archivo | Columnas que busca | Qué hace |
+| --- | --- | --- |
+| Carta | `nombre`, `precio`, `costo`, `categoría`, `descripción`, `etiquetas` | Crea o actualiza productos, y arma la categoría si no existe. |
+| Insumos | `insumo`, `unidad`, `stock`, `mínimo`, `objetivo`, `costo` | Ajusta el stock y los puntos de reposición. |
+| Información | `tema`, `contenido` — o un texto con títulos `## Tema` | Alimenta lo que el bot sabe del local. |
+
+Acepta CSV, TSV, TXT y Markdown, hasta 2 MB. Detecta el separador (`,` `;` tab)
+y respeta las comillas, así que sirve un export de Excel sin retocar.
+
+Dos cosas que hace a propósito:
+
+- **Lee los precios como los escribe la gente.** `$1.500`, `1.500,50`, `1,500.50`
+  y `1500.50` son todos el mismo número. Cuando aparecen los dos separadores el
+  último es el decimal; con uno solo se decide por cuántos dígitos le siguen.
+- **Nunca aplica sin mostrar.** Primero calcula el plan (qué crea, qué actualiza,
+  con el valor viejo y el nuevo, y qué filas no pudo leer) y recién se aplica
+  cuando alguien lo confirma. Al aplicar el plan se recalcula del archivo en el
+  servidor: no se confía en lo que mandó el navegador.
 
 ---
 
@@ -179,7 +224,7 @@ detrás de `db/index.ts`, así que migrar a Postgres es cambiar esa capa.
 npm test
 ```
 
-37 tests sobre la lógica que no puede fallar:
+59 tests sobre la lógica que no puede fallar:
 
 - **Pedidos**: valorización contra la carta, transiciones de estado válidas e
   inválidas, numeración diaria, comanda de cocina.
@@ -189,6 +234,12 @@ npm test
   cuando nadie llega a tiempo, ingreso al stock recién al recibir.
 - **Chatbot**: interpretación de cantidades, búsqueda con errores de tipeo, toma
   de pedido punta a punta, rechazo de ids inventados.
+- **Reservas**: un carrito abierto retiene stock para los demás, el propio no se
+  cuenta dos veces, un carrito viejo lo libera solo, y confirmar compite contra
+  el stock real.
+- **Ingesta**: lectura de precios en los formatos que usa la gente, detección del
+  separador y del tipo de archivo, vista previa que no escribe, y aplicación que
+  crea, actualiza y no duplica.
 - **Analítica**: resumen de ventas, clasificación de la carta, detección de caídas.
 
 Cada archivo corre contra su propia base efímera.
@@ -207,6 +258,9 @@ Cada archivo corre contra su propia base efímera.
 | `GET/POST/PATCH` | `/api/menu/products` | Carta. |
 | `GET` | `/api/stock/alerts` | Qué se está acabando y cuánto dura. |
 | `POST` | `/api/procurement/replenish` | Arma las órdenes de compra. |
+| `POST` | `/api/ingest/preview` | Qué cambiaría un archivo, sin tocar nada. |
+| `POST` | `/api/ingest/apply` | Aplica el archivo. |
+| `GET` | `/api/events` | Stream SSE de cambios (stock, carta, pedidos, compras). |
 | `GET` | `/api/lagging`, `/api/menu-performance`, `/api/demand-gaps` | Reportes de carta. |
 | `GET/POST/PATCH` | `/api/knowledge` | Lo que el local le enseña al bot. |
 
@@ -236,6 +290,9 @@ las comandas coherentes.
 - Autenticación real con usuarios y roles (hoy hay un token compartido).
 - Multi-local: el esquema lo soporta, falta el `tenant_id` y el filtrado.
 - Canal de WhatsApp: el motor ya es agnóstico del canal, falta el webhook.
+- Ingesta de `.xlsx` y `.pdf`: hoy hay que exportar a CSV primero.
+- El stream de eventos es un bus en memoria, así que asume un solo proceso. Si
+  algún día hay varios, se cambia por Redis y los emisores no se tocan.
 - Cobros y medios de pago.
 - Impresión directa a comandera (hoy la comanda se genera y se imprime desde el
   navegador).

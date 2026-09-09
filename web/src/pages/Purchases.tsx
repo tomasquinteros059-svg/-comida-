@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApi } from '../lib/useApi';
+import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction, useToast } from '../lib/toast';
 import type { PurchaseOrder, Supplier } from '../lib/types';
@@ -31,6 +32,7 @@ export function PurchasesPage() {
   const suppliers = useApi<Supplier[]>('/procurement/suppliers');
   const run = useAction();
   const { notify } = useToast();
+  useLive(['compras'], () => void orders.reload());
   const [message, setMessage] = useState<{ code: string; text: string } | null>(null);
   const [newSupplier, setNewSupplier] = useState(false);
 
@@ -96,7 +98,7 @@ export function PurchasesPage() {
 
                   <div className="row" style={{ marginTop: 12 }}>
                     <span className="small faint">
-                      Creada {timeAgo(po.created_at)} atras
+                      Creada {timeAgo(po.created_at)} atrás
                       {po.eta_at ? ` · llega ${new Date(po.eta_at).toLocaleString('es-AR')}` : ''}
                     </span>
                     <div className="row tight" style={{ marginLeft: 'auto' }}>
@@ -144,9 +146,9 @@ export function PurchasesPage() {
             <thead>
               <tr>
                 <th>Proveedor</th>
-                <th>Telefono</th>
+                <th>Teléfono</th>
                 <th className="num">Plazo</th>
-                <th className="num">Minimo</th>
+                <th className="num">Mínimo</th>
                 <th>Nota</th>
               </tr>
             </thead>
@@ -176,7 +178,7 @@ export function PurchasesPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Codigo</th>
+                  <th>Código</th>
                   <th>Proveedor</th>
                   <th>Estado</th>
                   <th className="num">Total</th>
@@ -265,7 +267,7 @@ function SupplierEditor({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </Field>
         <div className="grid cols-2">
-          <Field label="Telefono" hint="Con codigo de area, para el link de WhatsApp.">
+          <Field label="Teléfono" hint="Con código de area, para el link de WhatsApp.">
             <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </Field>
           <Field label="Plazo de entrega (horas)" hint="Define si sirve para un pedido urgente.">
@@ -284,7 +286,7 @@ function SupplierEditor({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             checked={form.express}
             onChange={(e) => setForm({ ...form, express: e.target.checked })}
           />
-          <span>Hace entregas express (mismo dia)</span>
+          <span>Hace entregas express (mismo día)</span>
         </label>
         <Field label="Nota">
           <input className="input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />

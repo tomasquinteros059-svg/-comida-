@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApi } from './lib/useApi';
+import { useLive } from './lib/useLive';
 import type { Dashboard } from './lib/types';
 import { DashboardPage } from './pages/Dashboard';
 import { KitchenPage } from './pages/Kitchen';
@@ -21,10 +22,10 @@ const ROUTES: RouteDef[] = [
   { id: 'panel', label: 'Panel', icon: '◲', section: 'Hoy', render: () => <DashboardPage /> },
   { id: 'cocina', label: 'Cocina', icon: '▤', section: 'Hoy', render: () => <KitchenPage /> },
   { id: 'chat', label: 'Chatbot', icon: '◈', section: 'Hoy', render: () => <ChatPage /> },
-  { id: 'carta', label: 'Carta', icon: '☰', section: 'Gestion', render: () => <MenuPage /> },
-  { id: 'stock', label: 'Stock', icon: '◱', section: 'Gestion', render: () => <StockPage /> },
-  { id: 'compras', label: 'Compras', icon: '⇄', section: 'Gestion', render: () => <PurchasesPage /> },
-  { id: 'bot', label: 'Entrenar al bot', icon: '✦', section: 'Gestion', render: () => <BotPage /> },
+  { id: 'carta', label: 'Carta', icon: '☰', section: 'Gestión', render: () => <MenuPage /> },
+  { id: 'stock', label: 'Stock', icon: '◱', section: 'Gestión', render: () => <StockPage /> },
+  { id: 'compras', label: 'Compras', icon: '⇄', section: 'Gestión', render: () => <PurchasesPage /> },
+  { id: 'bot', label: 'Entrenar al bot', icon: '✦', section: 'Gestión', render: () => <BotPage /> },
 ];
 
 const routeFromHash = () => {
@@ -34,7 +35,10 @@ const routeFromHash = () => {
 
 export function App() {
   const [route, setRoute] = useState(routeFromHash);
-  const { data: dashboard } = useApi<Dashboard>('/dashboard', 30_000);
+  const { data: dashboard, reload: reloadDashboard } = useApi<Dashboard>('/dashboard', 30_000);
+
+  // Los contadores del menú lateral siguen los cambios en vivo.
+  useLive(['pedido', 'stock', 'carta'], () => void reloadDashboard());
 
   useEffect(() => {
     const onHashChange = () => setRoute(routeFromHash());

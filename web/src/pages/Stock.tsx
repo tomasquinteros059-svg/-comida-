@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApi } from '../lib/useApi';
+import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction } from '../lib/toast';
 import type { Ingredient, ReplenishmentPlan, StockAlert } from '../lib/types';
@@ -21,7 +22,10 @@ export function StockPage() {
     await Promise.all([alerts.reload(), ingredients.reload()]);
   };
 
-  /** Dispara el servicio de reposicion con el plazo elegido. */
+  // Una venta o una recepción cambian el stock desde otra pantalla.
+  useLive(['stock', 'compras'], () => void reloadAll());
+
+  /** Dispara el servicio de reposición con el plazo elegido. */
   const replenish = (urgency: 'inmediato' | 'express' | 'normal') => {
     setBusy(true);
     void run(async () => {
@@ -59,7 +63,7 @@ export function StockPage() {
         </div>
       </div>
 
-      <Card title="Necesita reposicion" tight>
+      <Card title="Necesita reposición" tight>
         {alerts.data.length ? (
           <div className="table-wrap">
             <table>
@@ -68,7 +72,7 @@ export function StockPage() {
                   <th>Insumo</th>
                   <th className="num">Stock</th>
                   <th style={{ width: 120 }}>Nivel</th>
-                  <th className="num">Consumo/dia</th>
+                  <th className="num">Consumo/día</th>
                   <th className="num">Alcanza</th>
                   <th className="num">Sugerido</th>
                   <th>Frena estos platos</th>
@@ -120,7 +124,7 @@ export function StockPage() {
             </table>
           </div>
         ) : (
-          <Empty icon="✓">Todos los insumos estan por encima del minimo</Empty>
+          <Empty icon="✓">Todos los insumos están por encima del mínimo</Empty>
         )}
       </Card>
 
@@ -131,7 +135,7 @@ export function StockPage() {
               <tr>
                 <th>Insumo</th>
                 <th className="num">Stock</th>
-                <th className="num">Minimo</th>
+                <th className="num">Mínimo</th>
                 <th className="num">Objetivo</th>
                 <th className="num">Costo unitario</th>
                 <th className="num">Valorizado</th>
@@ -256,10 +260,10 @@ function AdjustModal({
           <input className="input" value={note} onChange={(event) => setNote(event.target.value)} />
         </Field>
         <div className="grid cols-2">
-          <Field label="Punto de reposicion" hint="Debajo de esto salta la alerta.">
+          <Field label="Punto de reposición" hint="Debajo de esto salta la alerta.">
             <input className="input" type="number" step="0.01" value={minQty} onChange={(e) => setMinQty(e.target.value)} />
           </Field>
-          <Field label="Nivel objetivo" hint="Hasta aca compra la reposicion automatica.">
+          <Field label="Nivel objetivo" hint="Hasta acá compra la reposición automatica.">
             <input className="input" type="number" step="0.01" value={parQty} onChange={(e) => setParQty(e.target.value)} />
           </Field>
         </div>
@@ -271,7 +275,7 @@ function AdjustModal({
 function PlanModal({ plan, onClose }: { plan: ReplenishmentPlan; onClose: () => void }) {
   return (
     <Modal
-      title={`Reposicion ${plan.urgency}`}
+      title={`Reposición ${plan.urgency}`}
       onClose={onClose}
       footer={
         <div className="row" style={{ width: '100%' }}>

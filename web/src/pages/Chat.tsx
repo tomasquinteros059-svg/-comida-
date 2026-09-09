@@ -4,7 +4,9 @@ import { useApi } from '../lib/useApi';
 import { useAction, useToast } from '../lib/toast';
 import type { ChatTurn } from '../lib/types';
 import { Badge, Card, Empty, Spinner } from '../components/ui';
-import { timeAgo } from '../lib/format';
+import { Uploader } from '../components/Uploader';
+import { useLive } from '../lib/useLive';
+import { clock, timeAgo } from '../lib/format';
 
 interface Bubble {
   id: string;
@@ -14,10 +16,10 @@ interface Bubble {
 }
 
 const SUGGESTIONS = [
-  'Hola, que tienen para comer?',
+  'Hola, ¿qué tienen para comer?',
   'Quiero 6 empanadas de carne y una gaseosa',
-  'Que me recomendas?',
-  'Cuanto es el total?',
+  '¿Qué me recomendás?',
+  '¿Cuánto es el total?',
   'Confirmar',
 ];
 
@@ -31,11 +33,25 @@ export function ChatPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [lastTurn, setLastTurn] = useState<ChatTurn | null>(null);
+  const [liveEvent, setLiveEvent] = useState<{ text: string; at: string } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const { notify } = useToast();
   const run = useAction();
 
   const { data: engine } = useApi<{ engine: string }>('/chat/engine');
+
+  // El bot lee la carta y el stock en cada turno, así que un cambio hecho
+  // desde el panel ya está aplicado. Esto solo lo hace visible para quien
+  // está mirando la conversación.
+  useLive(['stock', 'carta', 'conocimiento'], (event) => {
+    const labels: Partial<Record<typeof event.type, string>> = {
+      stock: 'Se movió el stock',
+      carta: 'Cambió la carta',
+      conocimiento: 'Cambió la información del local',
+    };
+    const label = labels[event.type] ?? 'Cambió algo';
+    setLiveEvent({ text: `${label}${event.detail ? `: ${event.detail}` : ''}`, at: event.at });
+  });
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' });
@@ -60,7 +76,7 @@ export function ChatPage() {
         ...current,
         { id: turn.message_id, role: 'assistant', text: turn.reply, trace: turn.trace },
       ]);
-      if (turn.order_id) notify('El pedido entro a cocina', 'ok');
+      if (turn.order_id) notify('El pedido entró a cocina', 'ok');
     } catch (err) {
       notify(err instanceof Error ? err.message : 'No pude hablar con el bot', 'error');
     } finally {
@@ -82,7 +98,7 @@ export function ChatPage() {
           action={
             <div className="row tight">
               <Badge tone={engine?.engine === 'llm' ? 'accent' : 'neutral'}>
-                {engine?.engine === 'llm' ? 'motor: Claude' : 'motor: deterministico'}
+                {engine?.engine === 'llm' ? 'motor: Claude' : 'motor: determinista'}
               </Badge>
               <button
                 className="btn small"
@@ -98,10 +114,16 @@ export function ChatPage() {
           }
           tight
         >
+          {liveEvent && (
+            <div className="banner info" style={{ borderRadius: 0, borderWidth: '0 0 1px' }}>
+              <span>{liveEvent.text}. El bot ya lo tiene en cuenta.</span>
+              <span className="small faint pushed nowrap">{clock(liveEvent.at)}</span>
+            </div>
+          )}
           <div className="chat-log" ref={logRef}>
             {!messages.length && (
               <Empty icon="◈">
-                Escribi como si fueras un cliente. El bot solo puede ofrecer lo que esta en la carta.
+                Escribí como si fueras un cliente. El bot solo puede ofrecer lo que está en la carta.
               </Empty>
             )}
             {messages.map((message) => (
@@ -112,7 +134,7 @@ export function ChatPage() {
                     <button className="btn ghost small" onClick={() => rate(message.id, 1)} title="Buena respuesta">
                       ↑
                     </button>
-                    <button className="btn ghost small" onClick={() => rate(message.id, -1)} title="Revisar esta respuesta">
+                    <button className="btn ghost small" onClick={() => rate(message.id, -1)} title="Revisar está respuesta">
                       ↓
                     </button>
                   </div>
@@ -131,7 +153,7 @@ export function ChatPage() {
           >
             <input
               className="input"
-              placeholder="Escribi el mensaje del cliente…"
+              placeholder="Escribí el mensaje del cliente…"
               value={input}
               onChange={(event) => setInput(event.target.value)}
               disabled={sending}
@@ -152,7 +174,9 @@ export function ChatPage() {
       </div>
 
       <div className="stack">
-        <Card title="Que hizo el bot">
+        <Uploader onApplied={() => setLiveEvent(null)} />
+
+        <Card title="Qué hizo el bot">
           {lastTurn?.trace.length ? (
             <div className="stack tight">
               {lastTurn.trace.map((step, index) => (
@@ -166,8 +190,9 @@ export function ChatPage() {
             </div>
           ) : (
             <p className="small muted">
-              Cada turno muestra aca las herramientas que ejecuto el bot: que busco en la carta, que
-              agrego al pedido y con que datos lo confirmo.
+              Cada turno muestra acá las herramientas que ejecutó el bot: qué buscó en la carta, qué
+              agregó al pedido y con qué datos lo confirmó. Los precios y el stock salen siempre de
+              la base, nunca del modelo.
             </p>
           )}
         </Card>

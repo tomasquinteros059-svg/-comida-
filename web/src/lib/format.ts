@@ -52,7 +52,7 @@ export const isToday = (value: string) => {
   );
 };
 
-/** Hora sola si es de hoy; con la fecha si es de otro dia. */
+/** Hora sola si es de hoy; con la fecha si es de otro día. */
 export const stamp = (value: string) =>
   isToday(value) ? clock(value) : `${shortDate(value)} ${clock(value)}`;
 

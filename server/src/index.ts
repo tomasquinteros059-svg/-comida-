@@ -12,6 +12,8 @@ import { ordersRouter } from './routes/orders.js';
 import { stockRouter } from './routes/stock.js';
 import { procurementRouter } from './routes/procurement.js';
 import { insightsRouter } from './routes/insights.js';
+import { ingestRouter } from './routes/ingest.js';
+import { eventStream } from './lib/events.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,7 +22,8 @@ export function createApp() {
 
   const app = express();
   app.use(cors());
-  app.use(express.json({ limit: '1mb' }));
+  // El limite alto es para la ingesta de planillas; la valida su propia ruta.
+  app.use(express.json({ limit: '4mb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -34,11 +37,20 @@ export function createApp() {
   // El chat es publico (lo usa el cliente final); el resto es del local.
   app.use('/api/chat', chatRouter);
 
+  // Stream de cambios del local: el panel y el chat se enteran al instante de
+  // un movimiento de stock en vez de esperar al proximo refresco.
+  // Va antes del guard general porque EventSource no puede mandar cabeceras:
+  // el token viaja por query string, y por eso este stream solo emite el tipo
+  // de cambio y una etiqueta corta, nunca datos del pedido.
+  app.get('/api/events', requireAdminStream, eventStream);
+
   app.use('/api', requireAdmin);
+
   app.use('/api/menu', menuRouter);
   app.use('/api/orders', ordersRouter);
   app.use('/api/stock', stockRouter);
   app.use('/api/procurement', procurementRouter);
+  app.use('/api/ingest', ingestRouter);
   app.use('/api', insightsRouter);
 
   // En produccion el panel se sirve desde el mismo proceso.
@@ -52,13 +64,20 @@ export function createApp() {
   return app;
 }
 
+/** Igual que requireAdmin, pero acepta el token por query string (SSE). */
+function requireAdminStream(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!config.adminToken) return next();
+  if (req.query.token === config.adminToken) return next();
+  return requireAdmin(req, res, next);
+}
+
 /** Proteccion simple del panel. Si no hay ADMIN_TOKEN configurado, pasa todo. */
 function requireAdmin(req: express.Request, _res: express.Response, next: express.NextFunction) {
   if (!config.adminToken) return next();
   const header = req.header('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : req.header('x-admin-token');
   if (token === config.adminToken) return next();
-  next(new HttpError(401, 'Falta el token de administracion'));
+  next(new HttpError(401, 'Falta el token de administración'));
 }
 
 const isMain = process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`;

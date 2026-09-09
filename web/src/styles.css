@@ -455,6 +455,27 @@ tbody tr:hover { background: var(--surface-2); }
 
 /* ── Varios ──────────────────────────────────────────────────────────────── */
 
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px 18px;
+  text-align: center;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  transition: border-color .12s, background .12s;
+}
+.dropzone.dragging { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone p { max-width: 46ch; }
+
+.change-list { margin: 0; padding-left: 18px; max-height: 190px; overflow-y: auto; }
+/* El detalle de un cambio puede ser largo ("$1.500 → $1.700 · Empanadas"):
+   tiene que envolver dentro de la columna, no cortarse contra el borde. */
+.change-list li { margin-bottom: 3px; overflow-wrap: anywhere; }
+.change-list .strong { color: var(--text); }
+
 .empty { padding: 34px 16px; text-align: center; color: var(--text-faint); }
 .empty-icon { font-size: 1.6rem; display: block; margin-bottom: 6px; opacity: 0.65; }
 
@@ -464,6 +485,7 @@ tbody tr:hover { background: var(--surface-2); }
 .mono { font-family: var(--mono); font-size: 0.82rem; }
 .nowrap { white-space: nowrap; }
 .strong { font-weight: 650; }
+.pushed { margin-left: auto; }
 .pos { color: var(--ok); }
 .neg { color: var(--danger); }
 

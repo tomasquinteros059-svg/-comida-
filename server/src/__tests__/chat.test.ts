@@ -82,7 +82,7 @@ describe('toma de pedido punta a punta', () => {
     assert.match(total.reply, /81,00|8\.100/);
 
     const done = respondDeterministic('confirmar', conversation.id);
-    assert.match(done.reply, /numero 1/);
+    assert.match(done.reply, /número 1/);
     assert.equal(getConversationOrThrow(conversation.id).cart.length, 0);
     assert.ok(getConversationOrThrow(conversation.id).order_id);
   });
@@ -113,7 +113,7 @@ describe('toma de pedido punta a punta', () => {
   it('no confirma un pedido vacio', () => {
     const conversation = createConversation();
     const result = respondDeterministic('confirmar', conversation.id);
-    assert.match(result.reply, /vacio/);
+    assert.match(result.reply, /vacío/);
   });
 
   it('quita una linea del pedido', () => {

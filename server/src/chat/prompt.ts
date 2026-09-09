@@ -1,16 +1,18 @@
 import { allSettings } from '../db/index.js';
 import { config } from '../config.js';
 import { menuAsText } from '../domain/menu.js';
+import { orderableNow } from '../domain/stock.js';
 import { knowledgeAsText } from '../domain/knowledge.js';
 
 /**
- * Arma el system prompt. Se reconstruye en cada turno a proposito: la carta y
- * el conocimiento cambian desde el panel y el bot tiene que verlo al instante.
+ * Arma el system prompt. Se reconstruye en cada turno a proposito: la carta, el
+ * stock y el conocimiento cambian desde el panel mientras el cliente escribe, y
+ * el bot tiene que verlo en el mensaje siguiente.
  */
-export function buildSystemPrompt(): string {
+export function buildSystemPrompt(conversationId?: string): string {
   const settings = allSettings();
   const localName = settings.nombre_local || 'el local';
-  const menu = menuAsText();
+  const menu = menuAsText({ orderable: orderableNow(conversationId) });
   const knowledge = knowledgeAsText();
 
   return `Sos el asistente de pedidos de ${localName}. Atendes por chat y tu trabajo es

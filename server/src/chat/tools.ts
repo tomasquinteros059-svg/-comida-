@@ -7,7 +7,7 @@ import {
   searchProducts,
 } from '../domain/menu.js';
 import { priceCart, createOrder } from '../domain/orders.js';
-import { checkAvailability } from '../domain/stock.js';
+import { checkAvailability, orderableNow } from '../domain/stock.js';
 import { menuPerformance } from '../domain/analytics.js';
 import {
   getConversationOrThrow,
@@ -35,7 +35,12 @@ export interface ToolDefinition {
 
 const money = (cents: number) => formatMoney(cents, config.currency);
 
-const describeProduct = (id: string) => {
+/**
+ * Ficha del producto tal como la lee el modelo. `disponible` refleja el stock
+ * libre en este instante, no solo la marca de la carta: si otro cliente ya
+ * tiene comprometidas las ultimas unidades, aca figura como no disponible.
+ */
+const describeProduct = (id: string, orderable?: Map<string, boolean>) => {
   const product = getProduct(id);
   if (!product) return null;
   return {
@@ -44,7 +49,7 @@ const describeProduct = (id: string) => {
     descripcion: product.description,
     precio: money(product.price_cents),
     categoria: product.category_name,
-    disponible: product.available,
+    disponible: orderable ? (orderable.get(product.id) ?? product.available) : product.available,
     etiquetas: product.tags,
     alergenos: product.allergens,
     opciones: getModifiersForProduct(product.id).map((g) => ({
@@ -61,7 +66,7 @@ const describeProduct = (id: string) => {
 function cartSummary(conversationId: string) {
   const conversation = getConversationOrThrow(conversationId);
   if (!conversation.cart.length) {
-    return { vacio: true, lineas: [], total: money(0), mensaje: 'El pedido esta vacio.' };
+    return { vacio: true, lineas: [], total: money(0), mensaje: 'El pedido está vacío.' };
   }
   const { lines, subtotal_cents } = priceCart(conversation.cart);
   return {
@@ -95,7 +100,7 @@ export const TOOLS: ToolDefinition[] = [
       },
       required: ['consulta'],
     },
-    execute: ({ consulta }) => {
+    execute: ({ consulta }, ctx) => {
       const matches = searchProducts(String(consulta));
       if (!matches.length) {
         return {
@@ -103,7 +108,8 @@ export const TOOLS: ToolDefinition[] = [
           mensaje: 'No hay nada parecido en la carta. Ofrece alternativas de categorias similares.',
         };
       }
-      return { resultados: matches.map((m) => describeProduct(m.product.id)) };
+      const orderable = orderableNow(ctx.conversationId);
+      return { resultados: matches.map((m) => describeProduct(m.product.id, orderable)) };
     },
   },
 
@@ -118,11 +124,12 @@ export const TOOLS: ToolDefinition[] = [
         categoria: { type: 'string', description: 'Opcional: filtra por nombre de categoria.' },
       },
     },
-    execute: ({ categoria }) => {
+    execute: ({ categoria }, ctx) => {
       const products = listProducts({ onlyActive: true });
       const filtered = categoria
         ? products.filter((p) => (p.category_name ?? '').toLowerCase().includes(String(categoria).toLowerCase()))
         : products;
+      const orderable = orderableNow(ctx.conversationId);
       const grouped: Record<string, unknown[]> = {};
       for (const p of filtered) {
         const key = p.category_name ?? 'Otros';
@@ -131,7 +138,7 @@ export const TOOLS: ToolDefinition[] = [
           nombre: p.name,
           precio: money(p.price_cents),
           descripcion: p.description,
-          disponible: p.available,
+          disponible: orderable.get(p.id) ?? p.available,
         });
       }
       return grouped;
@@ -160,7 +167,7 @@ export const TOOLS: ToolDefinition[] = [
     execute: ({ producto_id, cantidad, opciones_ids, nota }, ctx) => {
       const product = getProduct(String(producto_id));
       if (!product || !product.active) {
-        return { ok: false, error: 'Ese producto no existe en la carta. Volve a buscar con buscar_en_carta.' };
+        return { ok: false, error: 'Ese producto no existe en la carta. Volvé a buscar con buscar_en_carta.' };
       }
 
       const qty = Math.max(1, Math.floor(Number(cantidad ?? 1)));
@@ -171,7 +178,8 @@ export const TOOLS: ToolDefinition[] = [
         note: nota ? String(nota) : '',
       };
 
-      if (!product.available) {
+      const orderable = orderableNow(ctx.conversationId);
+      if (!(orderable.get(product.id) ?? product.available)) {
         recordDemandSignal({
           kind: 'sin_stock',
           query: product.name,
@@ -179,21 +187,22 @@ export const TOOLS: ToolDefinition[] = [
           conversation_id: ctx.conversationId,
         });
         const alternatives = searchProducts(product.category_name ?? product.name, 4)
-          .filter((m) => m.product.available && m.product.id !== product.id)
+          .filter((m) => (orderable.get(m.product.id) ?? m.product.available) && m.product.id !== product.id)
           .map((m) => ({ id: m.product.id, nombre: m.product.name, precio: money(m.product.price_cents) }));
         return {
           ok: false,
-          error: `${product.name} no esta disponible ahora.`,
+          error: `${product.name} no está disponible ahora.`,
           alternativas: alternatives,
           instruccion: 'Pedile disculpas al cliente y ofrecele estas alternativas.',
         };
       }
 
       // Chequeamos el carrito completo: dos unidades pueden entrar de a una y
-      // no alcanzar juntas.
+      // no alcanzar juntas. Se descuentan ademas los insumos que retienen los
+      // carritos de otras conversaciones abiertas.
       const conversation = getConversationOrThrow(ctx.conversationId);
       const nextCart = [...conversation.cart, line];
-      const check = checkAvailability(nextCart);
+      const check = checkAvailability(nextCart, { conversationId: ctx.conversationId });
       if (!check.ok) {
         recordDemandSignal({
           kind: 'sin_stock',
@@ -205,7 +214,7 @@ export const TOOLS: ToolDefinition[] = [
           ok: false,
           error: `No alcanza el stock para ${qty} x ${product.name}.`,
           faltantes: check.shortages.map((s) => `${s.ingredient_name} (faltan ${s.missing} ${s.unit})`),
-          instruccion: 'Ofrece una cantidad menor u otro producto.',
+          instruccion: 'Ofrecé una cantidad menor u otro producto.',
         };
       }
 
@@ -226,7 +235,7 @@ export const TOOLS: ToolDefinition[] = [
       const conversation = getConversationOrThrow(ctx.conversationId);
       const index = Number(indice);
       if (!Number.isInteger(index) || index < 0 || index >= conversation.cart.length) {
-        return { ok: false, error: 'Ese indice no existe en el pedido.' };
+        return { ok: false, error: 'Ese índice no existe en el pedido.' };
       }
       const cart = conversation.cart.filter((_, i) => i !== index);
       saveCart(ctx.conversationId, cart);
@@ -285,7 +294,7 @@ export const TOOLS: ToolDefinition[] = [
     execute: ({ nota }, ctx) => {
       const conversation = getConversationOrThrow(ctx.conversationId);
       if (!conversation.cart.length) {
-        return { ok: false, error: 'El pedido esta vacio, no hay nada que confirmar.' };
+        return { ok: false, error: 'El pedido está vacío, no hay nada que confirmar.' };
       }
       if (conversation.order_id) {
         return { ok: false, error: 'Este pedido ya fue confirmado.' };
@@ -293,7 +302,7 @@ export const TOOLS: ToolDefinition[] = [
 
       const details = conversation.details ?? {};
       if (conversation.service_type === 'delivery' && !details.address) {
-        return { ok: false, error: 'Falta la direccion de entrega. Pedisela al cliente.' };
+        return { ok: false, error: 'Falta la dirección de entrega. Pedísela al cliente.' };
       }
 
       try {
@@ -334,9 +343,12 @@ export const TOOLS: ToolDefinition[] = [
       type: 'object',
       properties: { criterio: { type: 'string' }, cantidad: { type: 'integer', default: 3 } },
     },
-    execute: ({ criterio, cantidad }) => {
+    execute: ({ criterio, cantidad }, ctx) => {
       const limit = Math.min(8, Math.max(1, Number(cantidad ?? 3)));
-      const available = new Set(listProducts({ onlyActive: true, onlyAvailable: true }).map((p) => p.id));
+      const orderable = orderableNow(ctx.conversationId);
+      const available = new Set(
+        listProducts({ onlyActive: true }).filter((p) => orderable.get(p.id)).map((p) => p.id),
+      );
 
       if (criterio) {
         const matches = searchProducts(String(criterio), 12).filter((m) => available.has(m.product.id));

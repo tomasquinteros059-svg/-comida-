@@ -50,7 +50,7 @@ export function respondDeterministic(message: string, conversationId: string): F
     const result = call('confirmar_pedido');
     if (result.ok) {
       return {
-        reply: `Listo, tu pedido es el numero ${result.numero_pedido}. Total ${result.total}. ` +
+        reply: `Listo, tu pedido es el número ${result.numero_pedido}. Total ${result.total}. ` +
           `Sale en unos ${result.demora_estimada_min} minutos.`,
         trace,
       };
@@ -61,23 +61,23 @@ export function respondDeterministic(message: string, conversationId: string): F
   if (intent(text, ['recomenda', 'sugeri', 'que me recomendas', 'lo mas pedido'])) {
     const result = call('recomendar', { cantidad: 3 });
     const names = (result.sugerencias ?? []).map((s: any) => `${s.nombre} (${s.precio})`).join(', ');
-    return { reply: names ? `Te recomiendo: ${names}.` : 'Todavia no tengo datos para recomendarte.', trace };
+    return { reply: names ? `Te recomiendo: ${names}.` : 'Todavía no tengo datos para recomendarte.', trace };
   }
 
   if (intent(text, ['sacar', 'quitar', 'borra', 'saca'])) {
     const cart = call('ver_pedido');
-    if (cart.vacio) return { reply: 'El pedido esta vacio, no hay nada para sacar.', trace };
+    if (cart.vacio) return { reply: 'El pedido está vacío, no hay nada para sacar.', trace };
     const target = findLineToRemove(text, cart.lineas);
-    if (target === null) return { reply: '¿Cual de los productos queres sacar?', trace };
+    if (target === null) return { reply: '¿Cuál de los productos querés sacar?', trace };
     const result = call('quitar_del_pedido', { indice: target });
-    return { reply: `Lo saque.\n\n${formatCart(result.pedido)}`, trace };
+    return { reply: `Lo saqué.\n\n${formatCart(result.pedido)}`, trace };
   }
 
   // Por defecto: interpretarlo como un pedido de productos.
   const requests = parseOrderRequest(message);
   if (!requests.length) {
     return {
-      reply: 'Contame que te gustaria pedir y te lo agrego. Si queres, escribi "carta" para ver el menu.',
+      reply: 'Contame qué te gustaría pedir y te lo agrego. Si querés, escribí "carta" para ver el menú.',
       trace,
     };
   }
@@ -104,10 +104,10 @@ export function respondDeterministic(message: string, conversationId: string): F
 
   const cart = call('ver_pedido');
   const parts: string[] = [];
-  if (added.length) parts.push(`Agregue ${added.join(' y ')}.`);
+  if (added.length) parts.push(`Agregué ${added.join(' y ')}.`);
   if (problems.length) parts.push(problems.join(' '));
-  if (added.length) parts.push(`Van ${cart.total}. ¿Agregas algo mas o lo confirmo?`);
-  return { reply: parts.join(' ') || 'No llegue a entender el pedido, ¿me lo repetis?', trace };
+  if (added.length) parts.push(`Van ${cart.total}. ¿Agregás algo más o lo confirmo?`);
+  return { reply: parts.join(' ') || 'No llegué a entender el pedido, ¿me lo repetís?', trace };
 }
 
 interface ParsedRequest {
@@ -151,7 +151,7 @@ function findLineToRemove(text: string, lines: { indice: number; producto: strin
 }
 
 function formatCart(cart: any): string {
-  if (!cart || cart.vacio) return 'Todavia no pediste nada.';
+  if (!cart || cart.vacio) return 'Todavía no pediste nada.';
   const lines = cart.lineas
     .map((l: any) => `  • ${l.cantidad} x ${l.producto} — ${l.subtotal}`)
     .join('\n');

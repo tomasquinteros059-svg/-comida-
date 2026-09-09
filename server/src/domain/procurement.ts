@@ -2,6 +2,7 @@ import { all, get, run, toDbBool, transaction } from '../db/index.js';
 import { newId, shortCode } from '../lib/ids.js';
 import { badRequest, notFound } from '../lib/http.js';
 import { adjustStock, stockAlerts, syncProductAvailability } from './stock.js';
+import { emit } from '../lib/events.js';
 import type { PurchaseStatus, Urgency } from './types.js';
 
 export interface Supplier {
@@ -215,7 +216,7 @@ export function createPurchaseOrder(input: {
   origin_ref?: string | null;
   note?: string;
 }): PurchaseOrder {
-  if (!input.lines.length) throw badRequest('La orden de compra no tiene items');
+  if (!input.lines.length) throw badRequest('La orden de compra no tiene ítems');
   const supplier = get<SupplierRow>('SELECT * FROM suppliers WHERE id = ?', [input.supplier_id]);
   if (!supplier) throw notFound('Proveedor');
 
@@ -286,6 +287,7 @@ export function advancePurchaseOrder(id: string, next: PurchaseStatus): Purchase
     syncProductAvailability();
   }
 
+  emit('compras', `${po.code} ${next}`);
   return getPurchaseOrder(po.id)!;
 }
 
@@ -404,8 +406,8 @@ export function purchaseOrderMessage(id: string): string {
   if (!po) throw notFound('Orden de compra');
   const urgencyLabel: Record<Urgency, string> = {
     inmediato: 'URGENTE - necesitamos entrega inmediata',
-    express: 'Entrega en el dia (menos de 24 h)',
-    normal: 'Entrega estandar',
+    express: 'Entrega en el día (menos de 24 h)',
+    normal: 'Entrega estándar',
   };
   const items = po.items.map((i) => `• ${i.ingredient_name}: ${i.qty} ${i.unit}`).join('\n');
   const eta = po.eta_at ? new Date(po.eta_at).toLocaleString('es-AR') : 'a coordinar';
@@ -417,7 +419,7 @@ export function purchaseOrderMessage(id: string): string {
     urgencyLabel[po.urgency],
     `Fecha estimada de entrega: ${eta}`,
     po.note ? `\nNota: ${po.note}` : '',
-    '\nGracias!',
+    '\n¡Gracias!',
   ]
     .filter((l) => l !== null)
     .join('\n');

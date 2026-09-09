@@ -54,7 +54,7 @@ describe('valorizacion del carrito', () => {
   it('rechaza cantidades invalidas', () => {
     assert.throws(
       () => priceCart([{ product_id: burger, qty: 0, modifier_ids: [], note: '' }]),
-      /Cantidad invalida/,
+      /Cantidad inválida/,
     );
   });
 });

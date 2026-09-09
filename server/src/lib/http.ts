@@ -32,7 +32,7 @@ export const route =
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof ZodError) {
     return res.status(400).json({
-      error: 'Datos invalidos',
+      error: 'Datos inválidos',
       issues: err.issues.map((i) => ({ campo: i.path.join('.'), detalle: i.message })),
     });
   }

@@ -17,7 +17,7 @@ export const chatRouter = Router();
 
 const chatBody = z.object({
   conversation_id: z.string().optional(),
-  message: z.string().min(1, 'El mensaje no puede estar vacio').max(2000),
+  message: z.string().min(1, 'El mensaje no puede estar vacío').max(2000),
   channel: z.string().optional(),
   customer_name: z.string().optional(),
 });

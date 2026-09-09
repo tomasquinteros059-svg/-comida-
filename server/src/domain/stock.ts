@@ -1,6 +1,7 @@
 import { all, get, run, toDbBool, transaction } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { notFound } from '../lib/http.js';
+import { emit } from '../lib/events.js';
 import type { CartLine, Ingredient } from './types.js';
 
 interface IngredientRow extends Omit<Ingredient, 'perishable'> {
@@ -90,6 +91,7 @@ export function adjustStock(
      VALUES (?,?,?,?,?,?,?)`,
     [newId('mov'), ingredientId, delta, reason, ref.refType ?? null, ref.refId ?? null, ref.note ?? ''],
   );
+  emit('stock', reason);
 }
 
 export const listMovements = (ingredientId?: string, limit = 100) =>
@@ -160,15 +162,119 @@ export function requirementsFor(lines: CartLine[]): RecipeNeed[] {
 
 export interface ShortageReport {
   ok: boolean;
-  shortages: (RecipeNeed & { missing: number })[];
+  shortages: (RecipeNeed & { missing: number; reserved: number })[];
+}
+
+/**
+ * Minutos que un carrito abierto retiene los insumos que necesita.
+ * Pasado ese tiempo se asume que la conversacion se abandono y el stock se
+ * libera solo, sin que nadie tenga que limpiarlo a mano.
+ */
+export const RESERVATION_MINUTES = 15;
+
+/**
+ * Insumos comprometidos por los carritos que estan abiertos ahora mismo.
+ *
+ * Sin esto dos clientes que chatean a la vez pueden llevarse las mismas
+ * ultimas unidades: el stock recien se descuenta al confirmar, asi que ambos
+ * pasan el control y uno de los dos se entera en la cocina.
+ */
+export function reservedQuantities(excludeConversationId?: string): Map<string, number> {
+  const rows = all<{ id: string; cart: string }>(
+    `SELECT id, cart FROM conversations
+     WHERE order_id IS NULL
+       AND cart <> '[]'
+       AND updated_at >= datetime('now', ?)`,
+    [`-${RESERVATION_MINUTES} minutes`],
+  );
+
+  const reserved = new Map<string, number>();
+  for (const row of rows) {
+    if (row.id === excludeConversationId) continue;
+    let cart: CartLine[];
+    try {
+      cart = JSON.parse(row.cart) as CartLine[];
+    } catch {
+      continue;
+    }
+    for (const need of requirementsFor(cart)) {
+      reserved.set(need.ingredient_id, (reserved.get(need.ingredient_id) ?? 0) + need.qty);
+    }
+  }
+  return reserved;
+}
+
+export interface AvailabilityOptions {
+  /**
+   * Conversacion que hace la consulta. Su propio carrito no cuenta como
+   * reserva ajena, porque las lineas que se estan por agregar ya vienen en
+   * `lines`.
+   */
+  conversationId?: string;
+  /** Ignora las reservas: se usa al confirmar, cuando ya no hay competencia. */
+  ignoreReservations?: boolean;
 }
 
 /** Verifica si alcanza el stock para preparar estas lineas. */
-export function checkAvailability(lines: CartLine[]): ShortageReport {
+export function checkAvailability(
+  lines: CartLine[],
+  options: AvailabilityOptions = {},
+): ShortageReport {
+  const reserved = options.ignoreReservations
+    ? new Map<string, number>()
+    : reservedQuantities(options.conversationId);
+
   const shortages = requirementsFor(lines)
-    .filter((need) => need.stock_qty < need.qty)
-    .map((need) => ({ ...need, missing: Number((need.qty - need.stock_qty).toFixed(3)) }));
+    .map((need) => {
+      const held = reserved.get(need.ingredient_id) ?? 0;
+      return { ...need, reserved: held, free: need.stock_qty - held };
+    })
+    .filter((need) => need.free < need.qty)
+    .map(({ free, ...need }) => ({
+      ...need,
+      missing: Number((need.qty - free).toFixed(3)),
+    }));
+
   return { ok: shortages.length === 0, shortages };
+}
+
+/** Stock libre de cada insumo: lo que hay menos lo que retienen otros carritos. */
+export function freeStock(excludeConversationId?: string): Map<string, number> {
+  const reserved = reservedQuantities(excludeConversationId);
+  return new Map(
+    listIngredients().map((i) => [i.id, i.stock_qty - (reserved.get(i.id) ?? 0)]),
+  );
+}
+
+/**
+ * Que productos se pueden vender ahora mismo, contando lo que retienen los
+ * carritos abiertos. Es la vista que usa el chatbot: la carta que ve el cliente
+ * no puede ofrecer algo que ya esta comprometido.
+ */
+export function orderableNow(excludeConversationId?: string): Map<string, boolean> {
+  const free = freeStock(excludeConversationId);
+  const rows = all<{ id: string; available: number }>(
+    'SELECT id, available FROM products WHERE active = 1',
+  );
+  const recipes = all<{ product_id: string; ingredient_id: string; qty: number }>(
+    'SELECT product_id, ingredient_id, qty FROM recipe_items WHERE product_id IS NOT NULL',
+  );
+
+  const byProduct = new Map<string, { ingredient_id: string; qty: number }[]>();
+  for (const row of recipes) {
+    const list = byProduct.get(row.product_id) ?? [];
+    list.push({ ingredient_id: row.ingredient_id, qty: row.qty });
+    byProduct.set(row.product_id, list);
+  }
+
+  return new Map(
+    rows.map((row) => {
+      if (row.available !== 1) return [row.id, false];
+      const recipe = byProduct.get(row.id);
+      if (!recipe) return [row.id, true];
+      return [row.id, recipe.every((item) => (free.get(item.ingredient_id) ?? 0) >= item.qty)];
+    }),
+  );
 }
 
 /** Descuenta los insumos de un pedido confirmado. */
@@ -365,5 +471,8 @@ export function syncProductAvailability(): { disabled: string[]; enabled: string
     }
   });
 
+  if (disabled.length || enabled.length) {
+    emit('carta', [...disabled.map((n) => `-${n}`), ...enabled.map((n) => `+${n}`)].join(', '));
+  }
   return { disabled, enabled };
 }

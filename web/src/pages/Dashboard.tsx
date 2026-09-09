@@ -42,7 +42,7 @@ export function DashboardPage() {
         <Stat
           label="En cocina"
           value={data.kitchen}
-          sub={data.kitchen ? 'Pedidos esperando salida' : 'Todo al dia'}
+          sub={data.kitchen ? 'Pedidos esperando salida' : 'Todo al día'}
         />
       </div>
 
@@ -63,7 +63,7 @@ export function DashboardPage() {
           />
         </Card>
 
-        <Card title="Lo mas vendido hoy" tight>
+        <Card title="Lo más vendido hoy" tight>
           {today.top_products.length ? (
             <div className="table-wrap">
               <table>
@@ -93,7 +93,7 @@ export function DashboardPage() {
 
       <div className="grid cols-2">
         <Card
-          title="Se esta por acabar"
+          title="Se está por acabar"
           action={<a className="btn small" href="#/compras">Reponer</a>}
           tight
         >
@@ -136,12 +136,12 @@ export function DashboardPage() {
               </table>
             </div>
           ) : (
-            <Empty icon="✓">El stock esta en orden</Empty>
+            <Empty icon="✓">El stock está en orden</Empty>
           )}
         </Card>
 
         <Card
-          title="Se estan quedando atras"
+          title="Se están quedando atrás"
           action={<a className="btn small" href="#/carta">Ver carta</a>}
           tight
         >
@@ -182,7 +182,7 @@ export function DashboardPage() {
                     <th>Pedido del cliente</th>
                     <th>Motivo</th>
                     <th className="num">Veces</th>
-                    <th className="num">Ultima</th>
+                    <th className="num">Última</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -191,7 +191,7 @@ export function DashboardPage() {
                       <td>{gap.query}</td>
                       <td>
                         <Badge tone={gap.kind === 'sin_stock' ? 'warn' : 'info'}>
-                          {gap.kind === 'sin_stock' ? 'sin stock' : 'no esta en la carta'}
+                          {gap.kind === 'sin_stock' ? 'sin stock' : 'no está en la carta'}
                         </Badge>
                       </td>
                       <td className="num">{gap.count}</td>
@@ -206,10 +206,10 @@ export function DashboardPage() {
           )}
         </Card>
 
-        <Card title="Ultimos 7 dias">
+        <Card title="Últimos 7 días">
           <div className="stack tight">
             <div className="row">
-              <span className="muted">Facturacion</span>
+              <span className="muted">Facturación</span>
               <span className="strong" style={{ marginLeft: 'auto' }}>{money(week.revenue_cents)}</span>
             </div>
             <div className="row">

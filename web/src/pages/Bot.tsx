@@ -15,7 +15,7 @@ interface FlaggedMessage {
 
 /**
  * Todo lo que el local le ensena al bot: politicas y respuestas frecuentes,
- * mas las senales de que el bot se equivoco o no supo responder.
+ * más las senales de que el bot se equivoco o no supo responder.
  */
 export function BotPage() {
   const knowledge = useApi<KnowledgeEntry[]>('/knowledge');
@@ -42,7 +42,7 @@ export function BotPage() {
   return (
     <div className="stack">
       <div className="banner info">
-        Lo que cargues aca entra en el prompt del bot en el turno siguiente. La carta y los precios
+        Lo que cargues acá entra en el prompt del bot en el turno siguiente. La carta y los precios
         no hace falta escribirlos: el bot los lee directo de la base.
       </div>
 
@@ -94,7 +94,7 @@ export function BotPage() {
                 <div key={message.id} className="banner warn" style={{ flexDirection: 'column', gap: 4 }}>
                   <span className="small">{message.content}</span>
                   <span className="small faint">
-                    {message.channel} · {timeAgo(message.created_at)} atras
+                    {message.channel} · {timeAgo(message.created_at)} atrás
                   </span>
                 </div>
               ))}

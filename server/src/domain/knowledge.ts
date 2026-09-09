@@ -1,6 +1,7 @@
 import { all, get, run, toDbBool } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { notFound } from '../lib/http.js';
+import { emit } from '../lib/events.js';
 
 export interface KnowledgeEntry {
   id: string;
@@ -43,11 +44,13 @@ export function updateKnowledge(id: string, patch: Partial<KnowledgeEntry>): Kno
      WHERE id = ?`,
     [next.topic, next.content, next.priority, toDbBool(next.active), id],
   );
+  emit('conocimiento', next.topic);
   return map(get<KnowledgeRow>('SELECT * FROM knowledge WHERE id = ?', [id])!);
 }
 
 export function deleteKnowledge(id: string): void {
   run('DELETE FROM knowledge WHERE id = ?', [id]);
+  emit('conocimiento', 'entrada eliminada');
 }
 
 /** Bloque de texto que se inyecta al prompt del bot. */

@@ -75,7 +75,7 @@ async function respondWithLLM(conversationId: string): Promise<EngineResult> {
       const response = await anthropic().messages.create({
         model: config.chatModel,
         max_tokens: 1024,
-        system: buildSystemPrompt(),
+        system: buildSystemPrompt(conversationId),
         tools,
         messages,
       });

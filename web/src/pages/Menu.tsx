@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApi } from '../lib/useApi';
+import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction } from '../lib/toast';
 import type { Category, LaggingProduct, MenuItemPerformance, Product } from '../lib/types';
@@ -43,6 +44,9 @@ export function MenuPage() {
     await Promise.all([menu.reload(), performance.reload(), lagging.reload()]);
   };
 
+  // Un movimiento de stock puede sacar o devolver un plato a la carta.
+  useLive(['carta', 'stock'], () => void reloadAll());
+
   const toggleAvailability = (product: Product) =>
     void run(async () => {
       // `available_override` fija la decision del local: la sincronizacion
@@ -77,7 +81,7 @@ export function MenuPage() {
 
   const byCategory = new Map<string, Product[]>();
   for (const product of products) {
-    const key = product.category_name ?? 'Sin categoria';
+    const key = product.category_name ?? 'Sin categoría';
     if (!byCategory.has(key)) byCategory.set(key, []);
     byCategory.get(key)!.push(product);
   }
@@ -86,8 +90,8 @@ export function MenuPage() {
     <div className="stack">
       {!!lagging.data?.length && (
         <Card
-          title={`Productos que se estan quedando atras (${lagging.data.length})`}
-          action={<span className="small faint">ultimos 30 dias</span>}
+          title={`Productos que se están quedando atrás (${lagging.data.length})`}
+          action={<span className="small faint">ultimos 30 días</span>}
           tight
         >
           <div className="table-wrap">
@@ -147,7 +151,7 @@ export function MenuPage() {
                   <th className="num">Costo</th>
                   <th className="num">Margen</th>
                   <th className="num">30 d</th>
-                  <th>Clasificacion</th>
+                  <th>Clasificación</th>
                   <th>Disponible</th>
                   <th />
                 </tr>
@@ -310,11 +314,11 @@ function ProductEditor({
         <Field label="Nombre">
           <input className="input" value={form.name} onChange={set('name')} />
         </Field>
-        <Field label="Descripcion" hint="El bot la usa para explicar el plato y para buscarlo.">
+        <Field label="Descripción" hint="El bot la usa para explicar el plato y para buscarlo.">
           <textarea className="textarea" value={form.description} onChange={set('description')} />
         </Field>
         <div className="grid cols-3">
-          <Field label="Categoria">
+          <Field label="Categoría">
             <select className="select" value={form.category_id} onChange={set('category_id')}>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>{category.name}</option>
