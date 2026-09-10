@@ -13,9 +13,13 @@ const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   listo: { status: 'entregado', label: 'Entregado' },
 };
 
-/** Minutos desde que entro el pedido. */
+/**
+ * Minutos desde que entró el pedido. Nunca negativo: si el reloj del servidor
+ * va adelantado respecto del navegador, un pedido recién entrado daría un
+ * número negativo y la comanda mostraría "-3 min".
+ */
 const elapsedMinutes = (order: Order) =>
-  Math.floor((Date.now() - parseDate(order.created_at).getTime()) / 60_000);
+  Math.max(0, Math.floor((Date.now() - parseDate(order.created_at).getTime()) / 60_000));
 
 export function KitchenPage() {
   const { data, loading, error, reload } = useApi<Order[]>('/orders/kitchen', 8_000);
