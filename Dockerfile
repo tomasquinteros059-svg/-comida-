@@ -9,12 +9,6 @@
 # ── Etapa de build ────────────────────────────────────────────────────────────
 FROM node:22-slim AS build
 
-# better-sqlite3 es un modulo nativo. Suele bajar un binario ya compilado, pero
-# si para esta plataforma no hay, lo compila; sin estas herramientas fallaria.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 make g++ \
- && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 # Primero los manifiestos: mientras no cambien, Docker reusa la capa de
@@ -22,7 +16,21 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY web/package.json ./web/
-RUN npm ci
+
+# better-sqlite3 es un modulo nativo. Para linux/amd64 y linux/arm64 con Node 22
+# baja un binario ya compilado y no necesita nada mas; en una plataforma sin
+# binario publicado hay que compilarlo, y ahi si hacen falta las herramientas.
+#
+# Por eso se intenta primero y se instala el compilador solo si hizo falta: son
+# unos 250 MB y varios minutos que la mayoria de los builds no tiene por que
+# pagar. `npm ci` borra node_modules antes de empezar, asi que el segundo
+# intento arranca limpio.
+RUN npm ci || ( \
+      echo "Sin binario precompilado para esta plataforma: compilando." \
+   && apt-get update \
+   && apt-get install -y --no-install-recommends python3 make g++ \
+   && rm -rf /var/lib/apt/lists/* \
+   && npm ci )
 
 COPY . .
 RUN npm run build
@@ -40,10 +48,13 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# npm workspaces sube todas las dependencias al node_modules de la raiz: no hay
+# un server/node_modules ni un web/node_modules que copiar. Node los encuentra
+# igual, porque al resolver sube de carpeta hasta dar con ellos.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/server/package.json ./server/package.json
-COPY --from=build /app/server/node_modules ./server/node_modules
+COPY --from=build /app/web/package.json ./web/package.json
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/web/dist ./web/dist
 

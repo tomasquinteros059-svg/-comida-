@@ -45,17 +45,32 @@ echo "[$(date '+%F %T')] listo: ${DESTINO}/${ARCHIVO} (${TAMANIO})"
 
 # Se verifica la copia antes de dar por bueno el backup: un archivo corrupto
 # que nadie revisó es peor que no tener backup, porque da tranquilidad falsa.
-if command -v sqlite3 >/dev/null 2>&1; then
-  if sqlite3 "${DESTINO}/${ARCHIVO}" "PRAGMA integrity_check;" | grep -q '^ok$'; then
-    PEDIDOS="$(sqlite3 "${DESTINO}/${ARCHIVO}" "SELECT COUNT(*) FROM orders;")"
-    echo "[$(date '+%F %T')] verificado: la copia abre bien y tiene ${PEDIDOS} pedidos"
-  else
-    echo "[$(date '+%F %T')] ATENCIÓN: la copia no pasó el chequeo de integridad" >&2
-    exit 1
-  fi
+#
+# La revisión se hace DENTRO del contenedor, que es donde vive SQLite. Antes
+# dependía de un `sqlite3` instalado en el servidor, y cuando no estaba el
+# script avisaba con una línea y seguía: en un cron esa línea no la lee nadie,
+# así que el backup quedaba sin verificar justo donde más falta hacía.
+docker compose cp "${DESTINO}/${ARCHIVO}" "${SERVICIO}:/tmp/verificar.db" > /dev/null
+
+if docker compose exec -T "$SERVICIO" node -e "
+  const Database = require('better-sqlite3');
+  const db = new Database('/tmp/verificar.db', { readonly: true });
+  const chequeo = db.pragma('integrity_check', { simple: true });
+  if (chequeo !== 'ok') { console.error('integrity_check dijo: ' + chequeo); process.exit(1); }
+  const pedidos = db.prepare('SELECT COUNT(*) AS n FROM orders').get().n;
+  const productos = db.prepare('SELECT COUNT(*) AS n FROM products').get().n;
+  console.log('la copia abre bien: ' + pedidos + ' pedidos, ' + productos + ' productos');
+  db.close();
+"; then
+  :
 else
-  echo "[$(date '+%F %T')] nota: instalá sqlite3 para que el script verifique la copia"
+  echo "[$(date '+%F %T')] ATENCIÓN: la copia no pasó el chequeo. NO sirve como backup." >&2
+  docker compose exec -T "$SERVICIO" rm -f /tmp/verificar.db 2>/dev/null || true
+  rm -f "${DESTINO}/${ARCHIVO}"
+  exit 1
 fi
+
+docker compose exec -T "$SERVICIO" rm -f /tmp/verificar.db 2>/dev/null || true
 
 # Borrar las viejas va último: si algo falló antes, no se toca lo que ya había.
 BORRADAS="$(find "$DESTINO" -name 'comeia-*.db' -type f -mtime "+${RETENCION_DIAS}" -print -delete | wc -l)"
@@ -65,3 +80,6 @@ echo "[$(date '+%F %T')] copias guardadas: $(find "$DESTINO" -name 'comeia-*.db'
 echo
 echo "Recordá que un backup que vive en el mismo disco que la base no es un"
 echo "backup. Sincronizá ${DESTINO} a otro lado (rclone, scp, S3)."
+echo
+echo "Para volver atrás con una de estas copias:"
+echo "  ./deploy/restore.sh ${DESTINO}/${ARCHIVO}"
