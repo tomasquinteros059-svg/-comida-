@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { localActual } from '../db/locales.js';
 
 /**
  * Bus de eventos del local. El panel y el chat se enteran de un cambio de
@@ -22,11 +23,23 @@ export interface LocalEvent {
 
 type Listener = (event: LocalEvent) => void;
 
-const listeners = new Set<Listener>();
+/**
+ * Un juego de oyentes POR LOCAL. Con uno solo, el panel de un local veria
+ * parpadear el contador de comandas cada vez que entra un pedido en otro.
+ */
+const porLocal = new Map<string, Set<Listener>>();
+
+const oyentesDe = (slug: string): Set<Listener> => {
+  const existente = porLocal.get(slug);
+  if (existente) return existente;
+  const nuevo = new Set<Listener>();
+  porLocal.set(slug, nuevo);
+  return nuevo;
+};
 
 export function emit(type: EventType, detail = ''): void {
   const event: LocalEvent = { type, detail, at: new Date().toISOString() };
-  for (const listener of [...listeners]) {
+  for (const listener of [...oyentesDe(localActual())]) {
     try {
       listener(event);
     } catch (err) {
@@ -36,8 +49,9 @@ export function emit(type: EventType, detail = ''): void {
 }
 
 export function subscribe(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  const oyentes = oyentesDe(localActual());
+  oyentes.add(listener);
+  return () => oyentes.delete(listener);
 }
 
 /** Handler SSE: mantiene abierta la conexion y empuja cada evento. */
@@ -65,5 +79,5 @@ export function eventStream(req: Request, res: Response): void {
   });
 }
 
-/** Solo para tests: deja el bus sin oyentes. */
-export const _resetListeners = () => listeners.clear();
+/** Solo para tests: deja el bus sin oyentes, en todos los locales. */
+export const _resetListeners = () => porLocal.clear();

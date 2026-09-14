@@ -3,25 +3,35 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
+import { baseDe, cerrarTodas, localActual, registrarEsquema } from './locales.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-let instance: Database.Database | null = null;
+let esquemaEnCache: string | null = null;
 
+const leerEsquema = (): string => {
+  esquemaEnCache ??= fs.readFileSync(path.join(here, 'schema.sql'), 'utf8');
+  return esquemaEnCache;
+};
+
+/**
+ * La base del local activo.
+ *
+ * Cual es el local viaja por contexto (ver db/locales.ts): asi el codigo de
+ * negocio —las cuarenta funciones que llaman a `all`, `get` y `run`— no se
+ * entera de que existen varios locales y no hay ningun parametro que alguien
+ * se pueda olvidar de pasar.
+ *
+ * En una instalacion de un solo local esto devuelve siempre el mismo archivo,
+ * exactamente como antes.
+ */
 export function db(): Database.Database {
-  if (instance) return instance;
-
-  fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
-  const handle = new Database(config.databasePath);
-  handle.pragma('journal_mode = WAL');
-  handle.pragma('foreign_keys = ON');
-
-  const schema = fs.readFileSync(path.join(here, 'schema.sql'), 'utf8');
-  aplicarEsquema(handle, schema);
-
-  instance = handle;
-  return instance;
+  return baseDe(localActual());
 }
+
+// Se registra al cargar el modulo: asi da igual desde donde se abra una base
+// —al dar de alta el local o al primer pedido— que el esquema queda aplicado.
+registrarEsquema((handle) => aplicarEsquema(handle, leerEsquema()));
 
 /**
  * Aplica el esquema, sentencia por sentencia y en el orden del archivo.
@@ -63,8 +73,7 @@ export function transaction<T>(fn: () => T): T {
 }
 
 export function closeDb(): void {
-  instance?.close();
-  instance = null;
+  cerrarTodas();
 }
 
 // ── Helpers tipados sobre better-sqlite3 ────────────────────────────────────

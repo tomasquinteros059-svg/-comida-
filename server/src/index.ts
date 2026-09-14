@@ -10,6 +10,9 @@ import { requireAuth, requireAuthStream, requirePermiso, type Actor } from './li
 import { authRouter } from './routes/auth.js';
 import { whatsappRouter, whatsappEstado } from './routes/whatsapp.js';
 import { cobrosRouter, cobrosWebhookRouter } from './routes/cobros.js';
+import { localesRouter } from './routes/locales.js';
+import { resolverLocal } from './lib/local.js';
+import { porCadaLocal } from './db/locales.js';
 import { limpiarMensajesVistos } from './domain/whatsapp.js';
 import { usuariosRouter } from './routes/usuarios.js';
 import { registrar } from './domain/users.js';
@@ -57,6 +60,10 @@ export function createApp() {
   // Todo lo demas, incluida la ruta publica del chat: un mensaje son dos mil
   // caracteres, no cuatro megas.
   app.use(express.json({ limit: '64kb' }));
+
+  // A que local pertenece este pedido. Va antes que todo lo que toca la base:
+  // de aca en adelante, cada consulta va al archivo del local que corresponde.
+  app.use('/api', resolverLocal);
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -106,6 +113,9 @@ export function createApp() {
   app.use('/api/procurement', requirePermiso('compras'), procurementRouter);
   app.use('/api/ingest', requirePermiso('carta'), ingestRouter);
   app.use('/api/usuarios', requirePermiso('usuarios'), usuariosRouter);
+  // Dar de alta un local es crear una base entera y cambiar un dominio manda
+  // los pedidos a otra cocina: es del dueño y nada mas.
+  app.use('/api/locales', requirePermiso('usuarios'), localesRouter);
   // Cobrar es plata: va con el permiso de ventas.
   app.use('/api/cobros', requirePermiso('ventas'), cobrosRouter);
   // El estado del canal es del que maneja el bot; el webhook de arriba es otra
@@ -217,14 +227,18 @@ if (isMain) {
   // Barrido de conversaciones viejas: una al arrancar y una por día. Es lo
   // unico que hace falta para que el plazo configurado se cumpla solo; sin
   // esto, la decision queda escrita y no pasa nada.
+  // Por cada local: estas tareas corren fuera de todo pedido, asi que sin esto
+  // solo limpiarian el local principal y los demas acumularian para siempre.
   const barrer = () => {
-    try {
-      const { conversaciones, mensajes, dias } = purgarConversacionesViejas();
-      if (conversaciones) {
-        console.log(`[retencion] ${conversaciones} conversaciones y ${mensajes} mensajes de mas de ${dias} dias`);
+    for (const { slug, resultado, error } of porCadaLocal(() => purgarConversacionesViejas())) {
+      if (error) {
+        console.error(`[retencion] ${slug}: no se pudo barrer:`, error);
+      } else if (resultado?.conversaciones) {
+        console.log(
+          `[retencion] ${slug}: ${resultado.conversaciones} conversaciones y ` +
+            `${resultado.mensajes} mensajes de mas de ${resultado.dias} dias`,
+        );
       }
-    } catch (err) {
-      console.error('[retencion] no se pudo barrer:', err);
     }
   };
   barrer();
@@ -233,14 +247,13 @@ if (isMain) {
 
   // Los ids de mensajes de WhatsApp viejos no sirven: Meta no reintenta
   // despues de un dia, y la tabla crece para siempre si nadie la limpia.
-  limpiarMensajesVistos();
-  const limpieza = setInterval(() => {
-    try {
-      limpiarMensajesVistos();
-    } catch (err) {
-      console.error('[whatsapp] no se pudo limpiar:', err);
+  const limpiar = () => {
+    for (const { slug, error } of porCadaLocal(() => limpiarMensajesVistos())) {
+      if (error) console.error(`[whatsapp] ${slug}: no se pudo limpiar:`, error);
     }
-  }, 24 * 60 * 60 * 1000);
+  };
+  limpiar();
+  const limpieza = setInterval(limpiar, 24 * 60 * 60 * 1000);
   limpieza.unref();
 
   const server = app.listen(config.port, () => {

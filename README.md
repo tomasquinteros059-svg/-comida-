@@ -279,6 +279,23 @@ Cada archivo corre contra su propia base efímera.
 | `POST` | `/api/auth/login`, `/api/auth/logout` | Entrar y salir. |
 | `GET` | `/api/auth/me` | Con qué arranca el panel: si hay que crear el primer dueño, si hay que pedir la clave, o quién está adentro. |
 
+### Varios locales
+
+Una instalación puede atender a varios locales. **Cada uno tiene su propio
+archivo SQLite**: su carta, sus pedidos, su facturación y sus usuarios.
+
+No hay una columna `local_id` en cada tabla, y eso es a propósito: con una
+columna, una sola consulta a la que se le olvidó el filtro muestra los pedidos
+de otro local. Es el peor error posible en este producto y no se detecta
+mirando la pantalla —los datos se ven bien, solo que son de otro—. Con un
+archivo por local ese error no se puede cometer.
+
+A cuál entra cada pedido lo decide el dominio. Qué local es viaja por
+`AsyncLocalStorage`, así que el código de negocio no se entera de que esto
+existe y no hay ningún parámetro que alguien se pueda olvidar de pasar.
+
+Con un solo local todo funciona exactamente como antes.
+
 ### Listados paginados
 
 Los listados largos (pedidos, conversaciones, órdenes de compra, movimientos de
@@ -336,7 +353,6 @@ las comandas coherentes.
 
 - Recuperar la clave por mail: hoy cada uno se la puede cambiar desde el panel,
   pero si la perdió del todo se la cambia el dueño desde **Usuarios**.
-- Multi-local: el esquema lo soporta, falta el `tenant_id` y el filtrado.
 - El stream de eventos es un bus en memoria, así que asume un solo proceso. Si
   algún día hay varios, se cambia por Redis y los emisores no se tocan.
 - Impresión directa a comandera (hoy la comanda se genera y se imprime desde el

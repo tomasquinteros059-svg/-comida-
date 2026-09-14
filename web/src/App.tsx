@@ -17,6 +17,7 @@ import { PurchasesPage } from './pages/Purchases';
 import { BotPage } from './pages/Bot';
 import { UsuariosPage } from './pages/Usuarios';
 import { CajaPage } from './pages/Caja';
+import { LocalesPage } from './pages/Locales';
 
 interface RouteDef {
   id: string;
@@ -44,6 +45,14 @@ const ROUTES: RouteDef[] = [
     section: 'Gestión',
     permiso: 'usuarios',
     render: (sesion) => <UsuariosPage yo={sesion.usuario?.id ?? null} />,
+  },
+  {
+    id: 'locales',
+    label: 'Locales',
+    icon: '⌂',
+    section: 'Gestión',
+    permiso: 'usuarios',
+    render: () => <LocalesPage />,
   },
 ];
 
