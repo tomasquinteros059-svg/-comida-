@@ -16,6 +16,7 @@ import { StockPage } from './pages/Stock';
 import { PurchasesPage } from './pages/Purchases';
 import { BotPage } from './pages/Bot';
 import { UsuariosPage } from './pages/Usuarios';
+import { CajaPage } from './pages/Caja';
 
 interface RouteDef {
   id: string;
@@ -30,6 +31,7 @@ interface RouteDef {
 const ROUTES: RouteDef[] = [
   { id: 'panel', label: 'Panel', icon: '◲', section: 'Hoy', permiso: 'ventas', render: () => <DashboardPage /> },
   { id: 'cocina', label: 'Cocina', icon: '▤', section: 'Hoy', permiso: 'cocina', render: () => <KitchenPage /> },
+  { id: 'caja', label: 'Caja', icon: '◫', section: 'Hoy', permiso: 'ventas', render: () => <CajaPage /> },
   { id: 'chat', label: 'Chatbot', icon: '◈', section: 'Hoy', permiso: 'bot', render: () => <ChatPage /> },
   { id: 'carta', label: 'Carta', icon: '☰', section: 'Gestión', permiso: 'carta', render: () => <MenuPage /> },
   { id: 'stock', label: 'Stock', icon: '◱', section: 'Gestión', permiso: 'stock', render: () => <StockPage /> },

@@ -34,6 +34,15 @@ export interface OrderRow {
   subtotal_cents: number;
   total_cents: number;
   conversation_id: string | null;
+  /**
+   * El estado del pago va aparte del estado del pedido: un pedido puede estar
+   * entregado y sin pagar (la cuenta que se paga al final) o pagado y sin
+   * cocinar (el que pago por link antes de llegar).
+   */
+  payment_status: 'sin_pagar' | 'pendiente' | 'pagado' | 'devuelto';
+  payment_method: string;
+  payment_ref: string | null;
+  paid_at: string | null;
   created_at: string;
   confirmed_at: string | null;
   ready_at: string | null;

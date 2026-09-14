@@ -9,6 +9,7 @@ import { errorHandler } from './lib/http.js';
 import { requireAuth, requireAuthStream, requirePermiso, type Actor } from './lib/auth.js';
 import { authRouter } from './routes/auth.js';
 import { whatsappRouter, whatsappEstado } from './routes/whatsapp.js';
+import { cobrosRouter, cobrosWebhookRouter } from './routes/cobros.js';
 import { limpiarMensajesVistos } from './domain/whatsapp.js';
 import { usuariosRouter } from './routes/usuarios.js';
 import { registrar } from './domain/users.js';
@@ -79,6 +80,10 @@ export function createApp() {
   // Lo unico que lo protege es la firma del cuerpo, que se verifica adentro.
   app.use('/api/whatsapp', whatsappRouter);
 
+  // El aviso de Mercado Pago tambien lo llama un tercero: publico, protegido
+  // por su firma, y nunca se cree lo que dice —el estado se consulta.
+  app.use('/api/cobros', cobrosWebhookRouter);
+
   // Stream de cambios del local: el panel y el chat se enteran al instante de
   // un movimiento de stock en vez de esperar al proximo refresco.
   // Va antes del guard general porque EventSource no puede mandar cabeceras:
@@ -101,6 +106,8 @@ export function createApp() {
   app.use('/api/procurement', requirePermiso('compras'), procurementRouter);
   app.use('/api/ingest', requirePermiso('carta'), ingestRouter);
   app.use('/api/usuarios', requirePermiso('usuarios'), usuariosRouter);
+  // Cobrar es plata: va con el permiso de ventas.
+  app.use('/api/cobros', requirePermiso('ventas'), cobrosRouter);
   // El estado del canal es del que maneja el bot; el webhook de arriba es otra
   // cosa y ya quedo del lado publico.
   app.get('/api/canales/whatsapp', requirePermiso('bot'), (_req, res) => res.json(whatsappEstado()));

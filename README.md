@@ -272,6 +272,7 @@ Cada archivo corre contra su propia base efímera.
 | `GET` | `/api/lagging`, `/api/menu-performance`, `/api/demand-gaps` | Reportes de carta. |
 | `GET/PUT` | `/api/retencion` | Cuánto se guardan las conversaciones. |
 | `GET/POST` | `/api/whatsapp` | Webhook de Meta. Público, protegido por firma. |
+| `GET/POST` | `/api/cobros` | Cobrar, cierre de caja y links de pago. |
 | `GET/POST/PATCH` | `/api/knowledge` | Lo que el local le enseña al bot. |
 
 | `GET/POST/PATCH/DELETE` | `/api/usuarios` | Equipo del local y registro de cambios. Solo el dueño. |
@@ -338,6 +339,5 @@ las comandas coherentes.
 - Multi-local: el esquema lo soporta, falta el `tenant_id` y el filtrado.
 - El stream de eventos es un bus en memoria, así que asume un solo proceso. Si
   algún día hay varios, se cambia por Redis y los emisores no se tocan.
-- Cobros y medios de pago.
 - Impresión directa a comandera (hoy la comanda se genera y se imprime desde el
   navegador).

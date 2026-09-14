@@ -325,3 +325,33 @@ CREATE TABLE IF NOT EXISTS mensajes_vistos (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_vistos_fecha ON mensajes_vistos(created_at);
+
+-- ── Cobros ──────────────────────────────────────────────────────────────────
+-- El estado del pago va aparte del estado del pedido: un pedido puede estar
+-- entregado y sin pagar (la cuenta que se paga al final) o pagado y sin
+-- cocinar (el que pago por link antes de llegar).
+ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'sin_pagar';
+ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN payment_ref TEXT;
+ALTER TABLE orders ADD COLUMN paid_at TEXT;
+CREATE INDEX IF NOT EXISTS idx_orders_pago ON orders(payment_status, created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_ref ON orders(payment_ref);
+
+-- Cada intento de cobro y cada aviso que llega del proveedor. Es el registro
+-- que hay que mirar cuando un cliente dice que pago y el local no lo ve.
+CREATE TABLE IF NOT EXISTS pagos (
+  id           TEXT PRIMARY KEY,
+  order_id     TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  proveedor    TEXT NOT NULL DEFAULT 'mercadopago',
+  -- pendiente | aprobado | rechazado | devuelto | cancelado
+  estado       TEXT NOT NULL DEFAULT 'pendiente',
+  monto_cents  INTEGER NOT NULL DEFAULT 0,
+  -- el id que le puso el proveedor, para poder rastrearlo del otro lado
+  referencia   TEXT,
+  link         TEXT NOT NULL DEFAULT '',
+  detalle      TEXT NOT NULL DEFAULT '',
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pagos_order ON pagos(order_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_pagos_ref ON pagos(referencia);
