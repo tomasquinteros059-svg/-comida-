@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { config } from '../config.js';
+import { badRequest, conflict } from '../lib/http.js';
 
 /**
  * Varios locales en la misma instalación.
@@ -71,7 +72,26 @@ const mapear = (fila: { slug: string; nombre: string; hosts: string; activo: num
   creado: fila.creado,
 });
 
+/**
+ * El local principal tiene que estar SIEMPRE en el registro.
+ *
+ * Si fuera implicito, dar de alta el primer local extra dejaria un registro con
+ * una sola fila —la nueva— y todo el trafico se iria ahi: el local original
+ * dejaria de ver su propia carta y sus propios pedidos, sin ningun error. Ya
+ * paso una vez, y por eso esto se arregla solo en vez de depender de que
+ * alguien se acuerde.
+ */
+function asegurarPrincipal(): void {
+  const handle = abrirRegistro();
+  const hay = handle.prepare('SELECT COUNT(*) AS n FROM locales').get() as { n: number };
+  if (hay.n > 0) return;
+  handle
+    .prepare('INSERT OR IGNORE INTO locales (slug, nombre, hosts) VALUES (?,?,?)')
+    .run(SLUG_POR_DEFECTO, 'Principal', '[]');
+}
+
 export function listarLocales(): Local[] {
+  asegurarPrincipal();
   return abrirRegistro()
     .prepare('SELECT * FROM locales ORDER BY nombre')
     .all()
@@ -95,14 +115,14 @@ export const aSlug = (texto: string): string =>
 
 export function crearLocal(input: { nombre: string; slug?: string; hosts?: string[] }): Local {
   const slug = aSlug(input.slug || input.nombre);
-  if (slug.length < 2) throw new Error('El nombre del local es muy corto');
-  if (obtenerLocal(slug)) throw new Error(`Ya hay un local con el nombre "${slug}"`);
+  if (slug.length < 2) throw badRequest('El nombre del local es muy corto');
+  if (obtenerLocal(slug)) throw conflict(`Ya hay un local con el nombre "${slug}"`);
 
   // Un dominio no puede apuntar a dos locales: el pedido terminaría en la
   // cocina equivocada.
   for (const host of input.hosts ?? []) {
     const duenio = localPorHost(host);
-    if (duenio) throw new Error(`"${host}" ya lleva al local "${duenio.nombre}"`);
+    if (duenio) throw conflict(`"${host}" ya lleva al local "${duenio.nombre}"`);
   }
 
   abrirRegistro()
@@ -117,11 +137,11 @@ export function crearLocal(input: { nombre: string; slug?: string; hosts?: strin
 
 export function actualizarLocal(slug: string, cambio: Partial<Pick<Local, 'nombre' | 'hosts' | 'activo'>>): Local {
   const actual = obtenerLocal(slug);
-  if (!actual) throw new Error(`No existe el local "${slug}"`);
+  if (!actual) throw badRequest(`No existe el local "${slug}"`);
 
   for (const host of cambio.hosts ?? []) {
     const duenio = localPorHost(host);
-    if (duenio && duenio.slug !== slug) throw new Error(`"${host}" ya lleva al local "${duenio.nombre}"`);
+    if (duenio && duenio.slug !== slug) throw conflict(`"${host}" ya lleva al local "${duenio.nombre}"`);
   }
 
   abrirRegistro()

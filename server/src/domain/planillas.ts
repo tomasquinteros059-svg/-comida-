@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { badRequest } from '../lib/http.js';
 
 /**
  * Leer la carta desde un Excel o un PDF.
@@ -48,7 +49,17 @@ export interface LecturaDePlanilla {
  */
 export async function leerExcel(datos: Buffer): Promise<LecturaDePlanilla> {
   const libro = new ExcelJS.Workbook();
-  await libro.xlsx.load(datos as unknown as ArrayBuffer);
+  try {
+    await libro.xlsx.load(datos as unknown as ArrayBuffer);
+  } catch {
+    // Un archivo cortado a la mitad, o un .csv al que le cambiaron la
+    // extension. Es culpa de quien lo subio, no del servidor, y el error tiene
+    // que decirle que hacer en vez de aparecer como una falla interna.
+    throw badRequest(
+      'No pude abrir el Excel. Puede estar dañado, o ser un archivo con otra ' +
+        'extensión: guardalo de nuevo como .xlsx desde tu planilla.',
+    );
+  }
 
   const avisos: string[] = [];
   const hojas = libro.worksheets.filter((h) => h.rowCount > 1);
@@ -56,7 +67,7 @@ export async function leerExcel(datos: Buffer): Promise<LecturaDePlanilla> {
   // error que ve quien sube el archivo es el especifico ("falta el encabezado
   // y al menos un dato") y no un "no hay ninguna hoja" que no dice que hacer.
   const conAlgo = hojas.length ? hojas : libro.worksheets.filter((h) => h.rowCount >= 1);
-  if (!conAlgo.length) throw new Error('El Excel no tiene ninguna hoja con datos');
+  if (!conAlgo.length) throw badRequest('El Excel no tiene ninguna hoja con datos');
 
   const hoja = conAlgo[0]!;
   if (hojas.length > 1) {
@@ -83,7 +94,9 @@ export async function leerExcel(datos: Buffer): Promise<LecturaDePlanilla> {
     filas.push(celdas.join(SEP));
   });
 
-  if (filas.length < 2) throw new Error('La hoja tiene menos de dos filas: hace falta el encabezado y al menos un dato');
+  if (filas.length < 2) {
+    throw badRequest('La hoja tiene menos de dos filas: hace falta el encabezado y al menos un dato');
+  }
 
   return {
     texto: filas.join('\n'),
@@ -117,12 +130,17 @@ export async function leerPdf(datos: Buffer): Promise<LecturaDePlanilla> {
   // La build "legacy" es la que anda en Node sin un DOM alrededor.
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
-  const documento = await pdfjs.getDocument({
+  let documento;
+  try {
+    documento = await pdfjs.getDocument({
     data: new Uint8Array(datos),
     // Sin worker: en el servidor no hay ventaja y complica el empaquetado.
     useWorkerFetch: false,
-    useSystemFonts: true,
-  }).promise;
+      useSystemFonts: true,
+    }).promise;
+  } catch {
+    throw badRequest('No pude abrir el PDF. Puede estar dañado o protegido con clave.');
+  }
 
   const avisos: string[] = [];
   const renglones: string[] = [];
@@ -178,7 +196,7 @@ export async function leerPdf(datos: Buffer): Promise<LecturaDePlanilla> {
   }
 
   if (!renglones.length) {
-    throw new Error(
+    throw badRequest(
       'No se pudo sacar texto del PDF. Si es un escaneo o una foto, el texto es una imagen ' +
         'y hay que pasarlo a Excel o CSV a mano.',
     );
@@ -229,11 +247,11 @@ export async function aTextoDeTabla(input: {
   }
 
   if (!input.base64) {
-    throw new Error(`Un ${formato === 'excel' ? 'Excel' : 'PDF'} hay que mandarlo en base64`);
+    throw badRequest(`Un ${formato === 'excel' ? 'Excel' : 'PDF'} hay que mandarlo en base64`);
   }
 
   const datos = Buffer.from(input.content, 'base64');
-  if (!datos.length) throw new Error('El archivo llegó vacío');
+  if (!datos.length) throw badRequest('El archivo llegó vacío');
 
   return formato === 'excel' ? leerExcel(datos) : leerPdf(datos);
 }

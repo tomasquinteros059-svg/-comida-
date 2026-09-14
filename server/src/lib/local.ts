@@ -32,7 +32,24 @@ export function resolverLocal(req: Request, res: Response, next: NextFunction): 
   // adentro del panel puede ver otro local, pero para eso hay que entrar
   // primero, y cada local tiene sus propios usuarios y sus propias claves.
   const porCabecera = req.header('x-local');
-  const elegido = porDominio ?? (porCabecera ? obtenerLocal(porCabecera) : undefined);
+
+  /**
+   * Mientras el principal no tenga dominios propios, atiende todo lo que no
+   * coincide con ningún otro.
+   *
+   * Sin esto, dar de alta el segundo local tira abajo al primero: el local que
+   * venía andando por IP o por un dominio que nadie cargó empieza a devolver
+   * 404 de un momento para el otro, y nadie relaciona una cosa con la otra.
+   * Cuando el principal SÍ tiene sus dominios, quiere decir que alguien
+   * configuró el ruteo a propósito y ahí un dominio desconocido es un error.
+   */
+  const principal = obtenerLocal(SLUG_POR_DEFECTO);
+  const principalEsElComodin = Boolean(principal?.activo && principal.hosts.length === 0);
+
+  const elegido =
+    porDominio ??
+    (porCabecera ? obtenerLocal(porCabecera) : undefined) ??
+    (principalEsElComodin ? principal : undefined);
 
   if (!elegido) {
     next(

@@ -9,7 +9,9 @@ import {
   localActual,
   obtenerLocal,
   rutaDe,
+  SLUG_POR_DEFECTO,
 } from '../db/locales.js';
+import { HttpError } from '../lib/http.js';
 
 /**
  * Los locales de esta instalacion.
@@ -50,6 +52,12 @@ localesRouter.patch(
     const body = z
       .object({ nombre: z.string().min(2).max(80).optional(), hosts, activo: z.boolean().optional() })
       .parse(req.body ?? {});
+
+    // Desactivar el principal dejaria la instalacion sin donde atender, y ahi
+    // ni siquiera se puede entrar al panel para volver atras.
+    if (req.params.slug === SLUG_POR_DEFECTO && body.activo === false) {
+      throw new HttpError(409, 'El local principal no se puede desactivar: quedarías sin panel');
+    }
     return actualizarLocal(req.params.slug!, body);
   }),
 );
