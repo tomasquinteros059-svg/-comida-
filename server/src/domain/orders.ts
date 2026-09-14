@@ -7,6 +7,7 @@ import { emit } from '../lib/events.js';
 import { assertProductOrderable, getModifiers } from './menu.js';
 import { checkAvailability, consumeForOrder, restoreForOrder, syncProductAvailability } from './stock.js';
 import type { CartLine, OrderStatus, PricedLine, ServiceType } from './types.js';
+import { armarPagina, type OpcionesDePagina, type Pagina } from '../lib/paginacion.js';
 
 /** Transiciones validas del pedido. Cualquier otra combinacion es un error. */
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -132,11 +133,10 @@ export function getOrderOrThrow(id: string): Order {
 export interface ListOrdersOptions {
   statuses?: OrderStatus[];
   since?: string;
-  limit?: number;
   channel?: string;
 }
 
-export function listOrders(opts: ListOrdersOptions = {}): Order[] {
+const dondeYParams = (opts: ListOrdersOptions) => {
   const where: string[] = [];
   const params: unknown[] = [];
   if (opts.statuses?.length) {
@@ -151,13 +151,26 @@ export function listOrders(opts: ListOrdersOptions = {}): Order[] {
     where.push('channel = ?');
     params.push(opts.channel);
   }
-  params.push(opts.limit ?? 100);
+  return { sql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+};
+
+/** Cuántos pedidos hay, sin traerlos. Es lo que necesita un contador. */
+export function contarOrdenes(opts: ListOrdersOptions = {}): number {
+  const { sql, params } = dondeYParams(opts);
+  return get<{ n: number }>(`SELECT COUNT(*) AS n FROM orders ${sql}`, params)?.n ?? 0;
+}
+
+export function listOrders(
+  opts: ListOrdersOptions = {},
+  opciones: OpcionesDePagina = { limite: 100, desde: 0 },
+): Pagina<Order> {
+  const { sql, params } = dondeYParams(opts);
+  const total = get<{ n: number }>(`SELECT COUNT(*) AS n FROM orders ${sql}`, params)?.n ?? 0;
   const orders = all<OrderRow>(
-    `SELECT * FROM orders ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY created_at DESC LIMIT ?`,
+    `SELECT * FROM orders ${sql} ORDER BY created_at DESC LIMIT ${opciones.limite} OFFSET ${opciones.desde}`,
     params,
   );
-  if (!orders.length) return [];
+  if (!orders.length) return armarPagina<Order>([], total, opciones);
 
   const ids = orders.map((o) => o.id);
   const items = all<OrderItemRow & { modifiers: string }>(
@@ -165,17 +178,19 @@ export function listOrders(opts: ListOrdersOptions = {}): Order[] {
     ids,
   ).map(mapItem);
 
-  return orders.map((order) => ({
-    ...order,
-    items: items.filter((i) => i.order_id === order.id),
-  }));
+  return armarPagina(
+    orders.map((order) => ({ ...order, items: items.filter((i) => i.order_id === order.id) })),
+    total,
+    opciones,
+  );
 }
 
 /** Tablero de cocina: lo que hay que cocinar ahora, mas viejo primero. */
 export function kitchenBoard(): Order[] {
-  return listOrders({ statuses: ['confirmado', 'en_preparacion', 'listo'], limit: 60 }).sort(
-    (a, b) => a.created_at.localeCompare(b.created_at),
-  );
+  return listOrders(
+    { statuses: ['confirmado', 'en_preparacion', 'listo'] },
+    { limite: 60, desde: 0 },
+  ).items.sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 // ── Escritura ───────────────────────────────────────────────────────────────

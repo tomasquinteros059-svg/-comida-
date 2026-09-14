@@ -3,7 +3,7 @@ import { useApi } from '../lib/useApi';
 import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction } from '../lib/toast';
-import type { Order } from '../lib/types';
+import type { Order, Pagina } from '../lib/types';
 import { Badge, Card, Empty, Modal, Spinner } from '../components/ui';
 import { SERVICE_LABEL, STATUS_LABEL, money, parseDate, stamp } from '../lib/format';
 import { usePermiso } from '../lib/sesionContext';
@@ -152,12 +152,12 @@ export function KitchenPage() {
 }
 
 function RecentOrders() {
-  const { data } = useApi<Order[]>('/orders?status=entregado,cancelado&limit=12', 30_000);
+  const { data } = useApi<Pagina<Order>>('/orders?status=entregado,cancelado&limite=12', 30_000);
   // La cocina no ve facturacion: el tablero le sirve igual sin la columna de
   // plata, y esa es justamente la parte que no le corresponde.
   const conPlata = usePermiso('ventas');
 
-  if (!data?.length) return null;
+  if (!data?.items.length) return null;
   return (
     <Card title="Cerrados recientemente" tight>
       <div className="table-wrap">
@@ -173,7 +173,7 @@ function RecentOrders() {
             </tr>
           </thead>
           <tbody>
-            {data.map((order) => (
+            {data.items.map((order) => (
               <tr key={order.id}>
                 <td className="mono">{String(order.daily_number).padStart(3, '0')}</td>
                 <td className="nowrap">{stamp(order.created_at)}</td>

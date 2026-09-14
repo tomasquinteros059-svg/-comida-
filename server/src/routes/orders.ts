@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { route } from '../lib/http.js';
+import { leerPagina } from '../lib/paginacion.js';
 import {
   advanceOrder,
   createOrder,
@@ -36,11 +37,14 @@ ordersRouter.get(
     const statuses = typeof req.query.status === 'string'
       ? (req.query.status.split(',') as OrderStatus[])
       : undefined;
-    return listOrders({
-      statuses,
-      since: typeof req.query.since === 'string' ? req.query.since : undefined,
-      limit: req.query.limit ? Number(req.query.limit) : undefined,
-    });
+    return listOrders(
+      {
+        statuses,
+        since: typeof req.query.since === 'string' ? req.query.since : undefined,
+        channel: typeof req.query.channel === 'string' ? req.query.channel : undefined,
+      },
+      leerPagina(req.query),
+    );
   }),
 );
 

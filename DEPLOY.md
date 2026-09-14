@@ -274,6 +274,11 @@ backup **antes**, no después.
 Esto anda y se puede usar. Pero hay cosas que todavía no están, y es mejor
 saberlas ahora que descubrirlas con el local funcionando:
 
+- **Las conversaciones se borran solas a los 90 días** (configurable en
+  **Entrenar al bot → Cuánto se guardan las conversaciones**, y `0` = nunca).
+  Las que terminaron en pedido no se tocan: ahí la charla es parte de la venta.
+  Revisá el plazo antes de abrir, porque los mensajes traen nombres, teléfonos
+  y direcciones de tus clientes.
 - **No hay "olvidé mi contraseña" por mail.** Cada uno se puede cambiar la
   clave desde el panel (tocá tu nombre arriba a la derecha), pero para eso hay
   que acordarse de la actual. Si alguien la perdió del todo, se la cambia el

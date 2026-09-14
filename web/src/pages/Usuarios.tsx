@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/useApi';
 import { useAction } from '../lib/toast';
-import { Badge, Card, Empty, Field, Modal, Spinner } from '../components/ui';
+import { Badge, Card, Empty, Field, Modal, Paginador, Spinner } from '../components/ui';
+import type { Pagina } from '../lib/types';
 import {
   DESCRIPCION_ROL,
   ETIQUETA_PERMISO,
@@ -28,19 +29,46 @@ interface Auditoria {
   created_at: string;
 }
 
+type PaginaDeAuditoria = Pagina<Auditoria> & { quienes: string[] };
+
+const LIMITE_BITACORA = 25;
+
 /**
  * Quién entra y qué puede tocar. Es la pantalla del dueño: nadie más la ve.
  */
 export function UsuariosPage({ yo }: { yo: string | null }) {
-  const { data, loading, reload } = useApi<ListadoUsuarios>('/usuarios');
-  const { data: auditoria, reload: recargarAuditoria } = useApi<Auditoria[]>('/usuarios/auditoria');
+  const { data, loading, reload } = useApi<ListadoUsuarios & { duenios_activos: number }>('/usuarios');
   const ejecutar = useAction();
   const [alta, setAlta] = useState(false);
   const [editando, setEditando] = useState<Usuario | null>(null);
 
+  // Filtros de la bitácora. Una lista sola alcanza la primera semana; después
+  // la pregunta real es "¿quién tocó el precio de la pizza el jueves?".
+  const [quien, setQuien] = useState('');
+  const [texto, setTexto] = useState('');
+  const [desdeFecha, setDesdeFecha] = useState('');
+  const [hastaFecha, setHastaFecha] = useState('');
+  const [desde, setDesde] = useState(0);
+
+  const consulta = new URLSearchParams({ limite: String(LIMITE_BITACORA), desde: String(desde) });
+  if (quien) consulta.set('quien', quien);
+  if (texto.trim()) consulta.set('texto', texto.trim());
+  if (desdeFecha) consulta.set('desde_fecha', desdeFecha);
+  if (hastaFecha) consulta.set('hasta_fecha', hastaFecha);
+
+  const { data: auditoria, reload: recargarAuditoria } = useApi<PaginaDeAuditoria>(
+    `/usuarios/auditoria?${consulta.toString()}`,
+  );
+
   const refrescar = () => {
     void reload();
     void recargarAuditoria();
+  };
+
+  /** Cambiar un filtro vuelve a la primera página: si no, se ve vacío. */
+  const filtrar = (aplicar: () => void) => {
+    aplicar();
+    setDesde(0);
   };
 
   async function cambiar(usuario: Usuario, cambio: Record<string, unknown>, aviso: string) {
@@ -53,6 +81,14 @@ export function UsuariosPage({ yo }: { yo: string | null }) {
 
   return (
     <div className="stack">
+      {data && data.duenios_activos < 2 && (
+        <div className="banner warn">
+          <strong>Hay un solo dueño.</strong> Si esa persona pierde la clave o
+          se toma vacaciones, la única forma de entrar es el token maestro del
+          servidor. Dale de alta a alguien más como dueño: se tarda un minuto y
+          evita quedarse afuera del propio local.
+        </div>
+      )}
       <Card
         title="Equipo"
         action={
@@ -122,9 +158,73 @@ export function UsuariosPage({ yo }: { yo: string | null }) {
         </div>
       </Card>
 
-      <Card title="Últimos movimientos">
-        {!auditoria?.length ? (
-          <Empty icon="⌁">Todavía no hay nada registrado.</Empty>
+      <Card title="Registro de cambios">
+        <div className="filtros" style={{ marginBottom: 14 }}>
+          <Field label="Quién">
+            <select
+              id="bitacora-quien"
+              className="input"
+              value={quien}
+              onChange={(e) => filtrar(() => setQuien(e.target.value))}
+            >
+              <option value="">todos</option>
+              {(auditoria?.quienes ?? []).map((q) => (
+                <option key={q} value={q}>
+                  {q}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Qué">
+            <input
+              id="bitacora-texto"
+              className="input"
+              value={texto}
+              placeholder="precio, mozzarella…"
+              onChange={(e) => filtrar(() => setTexto(e.target.value))}
+            />
+          </Field>
+          <Field label="Desde">
+            <input
+              id="bitacora-desde"
+              className="input"
+              type="date"
+              value={desdeFecha}
+              onChange={(e) => filtrar(() => setDesdeFecha(e.target.value))}
+            />
+          </Field>
+          <Field label="Hasta">
+            <input
+              id="bitacora-hasta"
+              className="input"
+              type="date"
+              value={hastaFecha}
+              onChange={(e) => filtrar(() => setHastaFecha(e.target.value))}
+            />
+          </Field>
+          {(quien || texto || desdeFecha || hastaFecha) && (
+            <button
+              className="btn ghost small"
+              onClick={() =>
+                filtrar(() => {
+                  setQuien('');
+                  setTexto('');
+                  setDesdeFecha('');
+                  setHastaFecha('');
+                })
+              }
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+
+        {!auditoria?.items.length ? (
+          <Empty icon="⌁">
+            {quien || texto || desdeFecha || hastaFecha
+              ? 'No hay movimientos con esos filtros.'
+              : 'Todavía no hay nada registrado.'}
+          </Empty>
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -136,7 +236,7 @@ export function UsuariosPage({ yo }: { yo: string | null }) {
                 </tr>
               </thead>
               <tbody>
-                {auditoria.slice(0, 40).map((fila, i) => (
+                {auditoria.items.map((fila, i) => (
                   <tr key={i}>
                     <td className="nowrap small muted">{fecha(fila.created_at)}</td>
                     <td>{fila.user_name}</td>
@@ -150,6 +250,15 @@ export function UsuariosPage({ yo }: { yo: string | null }) {
               </tbody>
             </table>
           </div>
+        )}
+        {auditoria && (
+          <Paginador
+            desde={auditoria.desde}
+            limite={auditoria.limite}
+            total={auditoria.total}
+            hayMas={auditoria.hay_mas}
+            onCambiar={setDesde}
+          />
         )}
       </Card>
 

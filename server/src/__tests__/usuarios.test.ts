@@ -402,7 +402,7 @@ describe('registro de cambios', () => {
       headers: { cookie },
       body: JSON.stringify({ name: 'Pizzas' }),
     });
-    const filas = users.listarAuditoria() as Array<{ user_name: string; action: string; target: string }>;
+    const filas = users.listarAuditoria().items;
     assert.ok(filas.some((f) => f.action === 'ingreso' && f.user_name === 'ana'));
     // El registro lo lee el dueño del local: tiene que decir qué pasó, no la
     // ruta HTTP que se llamó.
@@ -421,7 +421,7 @@ describe('registro de cambios', () => {
       headers: { cookie },
       body: JSON.stringify({ delta: -2, reason: 'merma' }),
     });
-    const fila = (users.listarAuditoria() as Array<{ action: string; target: string }>).find((f) =>
+    const fila = users.listarAuditoria().items.find((f) =>
       f.action.includes('stock'),
     );
     assert.equal(fila?.action, 'ajustó el stock de un insumo');
@@ -435,7 +435,32 @@ describe('registro de cambios', () => {
       headers: { cookie },
       body: JSON.stringify({ name: 'Pizzas' }),
     });
-    const filas = users.listarAuditoria() as Array<{ action: string }>;
+    const filas = users.listarAuditoria().items;
     assert.ok(!filas.some((f) => f.action.includes('categoría')));
+  });
+});
+
+describe('el local no puede quedar colgado de una sola persona', () => {
+  it('avisa cuando hay un solo dueño activo', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    const res = await pedir('/api/usuarios', { headers: { cookie } });
+    const cuerpo = await res.json();
+    assert.equal(cuerpo.duenios_activos, 1, 'el panel necesita saberlo para avisar');
+  });
+
+  it('deja de avisar con dos', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    await users.crearUsuario({ name: 'Beto', username: 'beto', clave: 'clave-de-prueba', role: 'dueño' });
+    const cuerpo = await pedir('/api/usuarios', { headers: { cookie } }).then((r) => r.json());
+    assert.equal(cuerpo.duenios_activos, 2);
+  });
+
+  it('dar de baja al segundo vuelve a dejar uno', async () => {
+    await entrarComo('dueño', 'ana');
+    const beto = await users.crearUsuario({
+      name: 'Beto', username: 'beto', clave: 'clave-de-prueba', role: 'dueño',
+    });
+    await users.actualizarUsuario(beto.id, { active: false });
+    assert.equal(users.cuantosDueños(), 1);
   });
 });

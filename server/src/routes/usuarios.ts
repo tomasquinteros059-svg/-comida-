@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError, route } from '../lib/http.js';
+import { leerPagina } from '../lib/paginacion.js';
 import {
   ROLES,
   actualizarUsuario,
@@ -8,7 +9,9 @@ import {
   crearUsuario,
   eliminarUsuario,
   listarAuditoria,
+  quienesFiguranEnLaAuditoria,
   listarUsuarios,
+  cuantosDueños,
   obtenerUsuario,
   permisosDe,
   PERMISOS,
@@ -25,6 +28,9 @@ usuariosRouter.get(
     usuarios: listarUsuarios(),
     roles: ROLES.map((r) => ({ rol: r, permisos: permisosDe(r) })),
     permisos: PERMISOS,
+    // Con un solo dueño el local queda colgado de una persona. El panel avisa
+    // en vez de esperar a que pase.
+    duenios_activos: cuantosDueños(),
   })),
 );
 
@@ -136,7 +142,18 @@ usuariosRouter.post(
   }),
 );
 
+const filtroDeAuditoria = z.object({
+  quien: z.string().max(120).optional(),
+  texto: z.string().max(200).optional(),
+  desde_fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va como AAAA-MM-DD').optional(),
+  hasta_fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va como AAAA-MM-DD').optional(),
+});
+
 usuariosRouter.get(
   '/auditoria',
-  route((req) => listarAuditoria(Number(req.query.limite ?? 200) || 200)),
+  route((req) => ({
+    ...listarAuditoria(leerPagina(req.query), filtroDeAuditoria.parse(req.query)),
+    // Para llenar el selector de "quién" sin que el panel tenga que adivinar.
+    quienes: quienesFiguranEnLaAuditoria(),
+  })),
 );

@@ -13,6 +13,7 @@ import {
 import { priceCart } from '../domain/orders.js';
 import { config, hasLLM } from '../config.js';
 import { rateLimit } from '../lib/rateLimit.js';
+import { leerPagina } from '../lib/paginacion.js';
 
 /**
  * Lo que puede llamar cualquiera desde internet: mandar un mensaje y saber que
@@ -64,7 +65,7 @@ chatAdminRouter.post(
 
 chatAdminRouter.get(
   '/conversations',
-  route(() => listConversations()),
+  route((req) => listConversations(leerPagina(req.query))),
 );
 
 chatAdminRouter.get(
@@ -88,7 +89,7 @@ chatAdminRouter.post(
 /** Mensajes marcados como malos: la cola de trabajo para mejorar el bot. */
 chatAdminRouter.get(
   '/flagged',
-  route(() => flaggedMessages()),
+  route((req) => flaggedMessages(leerPagina(req.query))),
 );
 
 chatPublicRouter.get(

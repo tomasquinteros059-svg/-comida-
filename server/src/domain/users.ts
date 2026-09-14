@@ -1,6 +1,7 @@
 import { randomBytes, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { all, get, run, toDbBool } from '../db/index.js';
+import { consultarPagina, type OpcionesDePagina, type Pagina } from '../lib/paginacion.js';
 import { newId } from '../lib/ids.js';
 import { badRequest, conflict, notFound } from '../lib/http.js';
 import { normalize } from '../lib/text.js';
@@ -97,6 +98,14 @@ export const listarUsuarios = (): Usuario[] =>
 
 export const contarUsuarios = (): number =>
   get<{ n: number }>('SELECT COUNT(*) AS n FROM users')?.n ?? 0;
+
+/**
+ * Cuántos dueños activos hay. Con uno solo el local queda colgado de una
+ * persona: si se va de vacaciones y pierde la clave, la única salida es el
+ * token maestro del servidor, que casi nadie tiene a mano.
+ */
+export const cuantosDueños = (): number =>
+  get<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'dueño' AND active = 1")?.n ?? 0;
 
 export const hayDueño = (): boolean =>
   (get<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'dueño' AND active = 1")?.n ?? 0) > 0;
@@ -282,9 +291,68 @@ export function registrar(entrada: EntradaAuditoria): void {
   );
 }
 
-export const listarAuditoria = (limite = 200) =>
-  all(
-    `SELECT user_name, role, action, target, detail, created_at
-     FROM audit_log ORDER BY created_at DESC LIMIT ?`,
-    [Math.min(limite, 1000)],
+export interface FiltroDeAuditoria {
+  /** Nombre o usuario de quien hizo el cambio. Coincidencia parcial. */
+  quien?: string;
+  /** Texto libre sobre la acción o sobre qué se tocó. */
+  texto?: string;
+  /** Desde y hasta, como AAAA-MM-DD. `hasta` incluye el día entero. */
+  desde_fecha?: string;
+  hasta_fecha?: string;
+}
+
+export interface FilaDeAuditoria {
+  user_name: string;
+  role: string;
+  action: string;
+  target: string;
+  detail: string;
+  created_at: string;
+}
+
+/**
+ * El registro de cambios, filtrable.
+ *
+ * Una lista sola alcanza la primera semana. Después la pregunta real es
+ * "¿quién tocó el precio de la pizza el jueves?", y para eso hace falta
+ * buscar por persona y por fecha.
+ */
+export function listarAuditoria(
+  opciones: OpcionesDePagina = { limite: 200, desde: 0 },
+  filtro: FiltroDeAuditoria = {},
+): Pagina<FilaDeAuditoria> {
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (filtro.quien?.trim()) {
+    where.push('user_name LIKE ?');
+    params.push(`%${filtro.quien.trim()}%`);
+  }
+  if (filtro.texto?.trim()) {
+    where.push('(action LIKE ? OR target LIKE ? OR detail LIKE ?)');
+    const q = `%${filtro.texto.trim()}%`;
+    params.push(q, q, q);
+  }
+  if (filtro.desde_fecha) {
+    where.push('created_at >= ?');
+    params.push(`${filtro.desde_fecha} 00:00:00`);
+  }
+  if (filtro.hasta_fecha) {
+    // El "hasta" de una persona incluye ese día entero, no las 00:00.
+    where.push('created_at <= ?');
+    params.push(`${filtro.hasta_fecha} 23:59:59`);
+  }
+
+  return consultarPagina<FilaDeAuditoria>(
+    'user_name, role, action, target, detail, created_at',
+    `FROM audit_log ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC`,
+    params,
+    opciones,
   );
+}
+
+/** Quiénes aparecen en el registro, para llenar el selector del filtro. */
+export const quienesFiguranEnLaAuditoria = (): string[] =>
+  all<{ user_name: string }>(
+    'SELECT DISTINCT user_name FROM audit_log ORDER BY user_name',
+  ).map((f) => f.user_name);

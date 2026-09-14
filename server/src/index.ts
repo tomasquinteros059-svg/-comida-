@@ -12,6 +12,7 @@ import { usuariosRouter } from './routes/usuarios.js';
 import { registrar } from './domain/users.js';
 import { describirPedido } from './lib/bitacora.js';
 import { usarMensajesEnCastellano } from './lib/errores-zod.js';
+import { purgarConversacionesViejas } from './domain/retencion.js';
 import { chatAdminRouter, chatPublicRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
 import { ordersRouter } from './routes/orders.js';
@@ -89,7 +90,7 @@ export function createApp() {
   for (const camino of ['/api/dashboard', '/api/sales', '/api/menu-performance', '/api/lagging']) {
     app.use(camino, requirePermiso('ventas'));
   }
-  for (const camino of ['/api/knowledge', '/api/demand-gaps']) {
+  for (const camino of ['/api/knowledge', '/api/demand-gaps', '/api/retencion']) {
     app.use(camino, requirePermiso('bot'));
   }
   // Los ajustes los lee todo el mundo (moneda, huso, nombre del local) y los
@@ -185,6 +186,24 @@ if (isMain) {
   }
 
   const app = createApp();
+
+  // Barrido de conversaciones viejas: una al arrancar y una por día. Es lo
+  // unico que hace falta para que el plazo configurado se cumpla solo; sin
+  // esto, la decision queda escrita y no pasa nada.
+  const barrer = () => {
+    try {
+      const { conversaciones, mensajes, dias } = purgarConversacionesViejas();
+      if (conversaciones) {
+        console.log(`[retencion] ${conversaciones} conversaciones y ${mensajes} mensajes de mas de ${dias} dias`);
+      }
+    } catch (err) {
+      console.error('[retencion] no se pudo barrer:', err);
+    }
+  };
+  barrer();
+  const barrido = setInterval(barrer, 24 * 60 * 60 * 1000);
+  barrido.unref();
+
   const server = app.listen(config.port, () => {
     console.log(`comeIA escuchando en el puerto ${config.port}`);
     console.log(`  entorno:       ${config.env}`);

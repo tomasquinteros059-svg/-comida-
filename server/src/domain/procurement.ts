@@ -4,6 +4,7 @@ import { badRequest, notFound } from '../lib/http.js';
 import { adjustStock, stockAlerts, syncProductAvailability } from './stock.js';
 import { emit } from '../lib/events.js';
 import type { PurchaseStatus, Urgency } from './types.js';
+import { armarPagina, type OpcionesDePagina, type Pagina } from '../lib/paginacion.js';
 
 export interface Supplier {
   id: string;
@@ -191,15 +192,21 @@ export function getPurchaseOrder(id: string): PurchaseOrder | undefined {
   return { ...row, items };
 }
 
-export function listPurchaseOrders(statuses?: PurchaseStatus[]): PurchaseOrder[] {
+export function listPurchaseOrders(
+  statuses?: PurchaseStatus[],
+  opciones: OpcionesDePagina = { limite: 50, desde: 0 },
+): Pagina<PurchaseOrder> {
   const where = statuses?.length ? `WHERE po.status IN (${statuses.map(() => '?').join(',')})` : '';
+  const params = statuses ?? [];
+  const total =
+    get<{ n: number }>(`SELECT COUNT(*) AS n FROM purchase_orders po ${where}`, params)?.n ?? 0;
   const rows = all<Omit<PurchaseOrder, 'items'>>(
     `SELECT po.*, s.name AS supplier_name, s.phone AS supplier_phone
      FROM purchase_orders po JOIN suppliers s ON s.id = po.supplier_id
-     ${where} ORDER BY po.created_at DESC LIMIT 100`,
-    statuses ?? [],
+     ${where} ORDER BY po.created_at DESC LIMIT ${opciones.limite} OFFSET ${opciones.desde}`,
+    params,
   );
-  return rows.map((row) => getPurchaseOrder(row.id)!);
+  return armarPagina(rows.map((row) => getPurchaseOrder(row.id)!), total, opciones);
 }
 
 export interface PurchaseLineInput {

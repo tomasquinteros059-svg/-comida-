@@ -3,6 +3,7 @@ import { newId } from '../lib/ids.js';
 import { notFound } from '../lib/http.js';
 import { emit } from '../lib/events.js';
 import type { CartLine, Ingredient } from './types.js';
+import { consultarPagina, type OpcionesDePagina, type Pagina } from '../lib/paginacion.js';
 
 interface IngredientRow extends Omit<Ingredient, 'perishable'> {
   perishable: number;
@@ -94,20 +95,18 @@ export function adjustStock(
   emit('stock', reason);
 }
 
-export const listMovements = (ingredientId?: string, limit = 100) =>
-  ingredientId
-    ? all(
-        `SELECT m.*, i.name AS ingredient_name, i.unit FROM stock_movements m
-         JOIN ingredients i ON i.id = m.ingredient_id
-         WHERE m.ingredient_id = ? ORDER BY m.created_at DESC LIMIT ?`,
-        [ingredientId, limit],
-      )
-    : all(
-        `SELECT m.*, i.name AS ingredient_name, i.unit FROM stock_movements m
-         JOIN ingredients i ON i.id = m.ingredient_id
-         ORDER BY m.created_at DESC LIMIT ?`,
-        [limit],
-      );
+export const listMovements = (
+  ingredientId?: string,
+  opciones: OpcionesDePagina = { limite: 100, desde: 0 },
+): Pagina<Record<string, unknown>> =>
+  consultarPagina(
+    'm.*, i.name AS ingredient_name, i.unit',
+    `FROM stock_movements m JOIN ingredients i ON i.id = m.ingredient_id
+     ${ingredientId ? 'WHERE m.ingredient_id = ?' : ''}
+     ORDER BY m.created_at DESC`,
+    ingredientId ? [ingredientId] : [],
+    opciones,
+  );
 
 // ── Recetas ─────────────────────────────────────────────────────────────────
 

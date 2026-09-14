@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/useApi';
 import { useAction, useToast } from '../lib/toast';
-import type { ChatTurn } from '../lib/types';
+import type { ChatTurn, Pagina } from '../lib/types';
 import { Badge, Card, Empty, Spinner } from '../components/ui';
 import { Uploader } from '../components/Uploader';
 import { useLive } from '../lib/useLive';
@@ -213,12 +213,12 @@ interface ConversationSummary {
 }
 
 function Conversations() {
-  const { data } = useApi<ConversationSummary[]>('/chat/conversations', 20_000);
-  if (!data?.length) return null;
+  const { data } = useApi<Pagina<ConversationSummary>>('/chat/conversations?limite=50', 20_000);
+  if (!data?.items.length) return null;
   return (
     <Card title="Conversaciones recientes" tight>
       <div className="stack tight" style={{ padding: 12 }}>
-        {data.slice(0, 8).map((conversation) => (
+        {data.items.slice(0, 8).map((conversation) => (
           <div key={conversation.id} className="stack tight" style={{ gap: 2 }}>
             <div className="row tight">
               <Badge tone={conversation.order_id ? 'ok' : 'neutral'}>

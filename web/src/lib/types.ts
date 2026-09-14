@@ -189,3 +189,15 @@ export interface KnowledgeEntry {
   active: boolean;
   updated_at: string;
 }
+
+/**
+ * Un listado paginado. El total es cuántas hay, no cuántas vinieron: es lo
+ * que permite mostrar "31–60 de 412" y saber si hay una página más.
+ */
+export interface Pagina<T> {
+  items: T[];
+  total: number;
+  desde: number;
+  limite: number;
+  hay_mas: boolean;
+}

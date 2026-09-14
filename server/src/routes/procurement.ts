@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { route } from '../lib/http.js';
+import { leerPagina } from '../lib/paginacion.js';
 import {
   advancePurchaseOrder,
   bestOffer,
@@ -80,6 +81,7 @@ procurementRouter.get(
   route((req) =>
     listPurchaseOrders(
       typeof req.query.status === 'string' ? (req.query.status.split(',') as never) : undefined,
+      leerPagina(req.query),
     ),
   ),
 );

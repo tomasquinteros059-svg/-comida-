@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { route } from '../lib/http.js';
+import { leerPagina } from '../lib/paginacion.js';
 import { all, run } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import {
@@ -50,7 +51,12 @@ stockRouter.post(
 
 stockRouter.get(
   '/movements',
-  route((req) => listMovements(typeof req.query.ingredient_id === 'string' ? req.query.ingredient_id : undefined)),
+  route((req) =>
+    listMovements(
+      typeof req.query.ingredient_id === 'string' ? req.query.ingredient_id : undefined,
+      leerPagina(req.query),
+    ),
+  ),
 );
 
 stockRouter.get('/alerts', route(() => stockAlerts()));

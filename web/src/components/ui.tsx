@@ -159,3 +159,43 @@ export function Meter({ value, max, tone }: { value: number; max: number; tone: 
     </div>
   );
 }
+
+/**
+ * Paginador. Muestra el tramo y el total, no solo "anterior/siguiente":
+ * "31–60 de 412" le dice al local cuánto hay antes de hacer clic.
+ */
+export function Paginador({
+  desde,
+  limite,
+  total,
+  hayMas,
+  onCambiar,
+}: {
+  desde: number;
+  limite: number;
+  total: number;
+  hayMas: boolean;
+  onCambiar: (desde: number) => void;
+}) {
+  if (total <= limite && desde === 0) return null;
+  const hasta = Math.min(desde + limite, total);
+  return (
+    <div className="paginador">
+      <span className="small muted nowrap">
+        {total === 0 ? 'sin resultados' : `${desde + 1}–${hasta} de ${total}`}
+      </span>
+      <div className="row-actions">
+        <button
+          className="btn ghost small"
+          disabled={desde === 0}
+          onClick={() => onCambiar(Math.max(0, desde - limite))}
+        >
+          ← Anterior
+        </button>
+        <button className="btn ghost small" disabled={!hayMas} onClick={() => onCambiar(desde + limite)}>
+          Siguiente →
+        </button>
+      </div>
+    </div>
+  );
+}

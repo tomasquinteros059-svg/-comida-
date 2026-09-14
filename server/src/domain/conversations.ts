@@ -2,6 +2,7 @@ import { all, get, jsonParse, run } from '../db/index.js';
 import { newId } from '../lib/ids.js';
 import { notFound } from '../lib/http.js';
 import type { CartLine, ServiceType } from './types.js';
+import { consultarPagina, type OpcionesDePagina, type Pagina } from '../lib/paginacion.js';
 
 export interface Conversation {
   id: string;
@@ -128,20 +129,27 @@ export function rateMessage(messageId: string, rating: 1 | -1): void {
   run('UPDATE messages SET rating = ? WHERE id = ?', [rating, messageId]);
 }
 
-export const listConversations = (limit = 50) =>
-  all(
-    `SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count,
-            (SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message
-     FROM conversations c ORDER BY c.updated_at DESC LIMIT ?`,
-    [limit],
+export const listConversations = (
+  opciones: OpcionesDePagina = { limite: 50, desde: 0 },
+): Pagina<Record<string, unknown>> =>
+  consultarPagina(
+    `c.*, (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count,
+     (SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message`,
+    'FROM conversations c ORDER BY c.updated_at DESC',
+    [],
+    opciones,
   );
 
 /** Conversaciones con feedback negativo: lo que hay que corregir en el bot. */
-export const flaggedMessages = (limit = 50) =>
-  all(
-    `SELECT m.*, c.channel FROM messages m JOIN conversations c ON c.id = m.conversation_id
-     WHERE m.rating = -1 ORDER BY m.created_at DESC LIMIT ?`,
-    [limit],
+export const flaggedMessages = (
+  opciones: OpcionesDePagina = { limite: 50, desde: 0 },
+): Pagina<Record<string, unknown>> =>
+  consultarPagina(
+    'm.*, c.channel',
+    `FROM messages m JOIN conversations c ON c.id = m.conversation_id
+     WHERE m.rating = -1 ORDER BY m.created_at DESC`,
+    [],
+    opciones,
   );
 
 export function recordDemandSignal(input: {

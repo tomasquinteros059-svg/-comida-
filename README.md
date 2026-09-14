@@ -270,11 +270,24 @@ Cada archivo corre contra su propia base efímera.
 | `POST` | `/api/ingest/apply` | Aplica el archivo. |
 | `GET` | `/api/events` | Stream SSE de cambios (stock, carta, pedidos, compras). |
 | `GET` | `/api/lagging`, `/api/menu-performance`, `/api/demand-gaps` | Reportes de carta. |
+| `GET/PUT` | `/api/retencion` | Cuánto se guardan las conversaciones. |
 | `GET/POST/PATCH` | `/api/knowledge` | Lo que el local le enseña al bot. |
 
 | `GET/POST/PATCH/DELETE` | `/api/usuarios` | Equipo del local y registro de cambios. Solo el dueño. |
 | `POST` | `/api/auth/login`, `/api/auth/logout` | Entrar y salir. |
 | `GET` | `/api/auth/me` | Con qué arranca el panel: si hay que crear el primer dueño, si hay que pedir la clave, o quién está adentro. |
+
+### Listados paginados
+
+Los listados largos (pedidos, conversaciones, órdenes de compra, movimientos de
+stock, registro de cambios) aceptan `?limite=` y `?desde=` y devuelven:
+
+```json
+{ "items": [], "total": 412, "desde": 30, "limite": 30, "hay_mas": true }
+```
+
+`total` es cuántas hay, no cuántas vinieron: es lo que permite mostrar
+"31–60 de 412" y saber si falta una página.
 
 ### Quién ve qué
 

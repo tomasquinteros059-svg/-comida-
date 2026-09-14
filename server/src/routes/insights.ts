@@ -11,7 +11,7 @@ import {
   todayIso,
 } from '../domain/analytics.js';
 import { stockAlerts } from '../domain/stock.js';
-import { kitchenBoard, listOrders } from '../domain/orders.js';
+import { contarOrdenes, kitchenBoard } from '../domain/orders.js';
 import {
   createKnowledge,
   deleteKnowledge,
@@ -19,6 +19,7 @@ import {
   updateKnowledge,
 } from '../domain/knowledge.js';
 import { config } from '../config.js';
+import { estadoDeRetencion, fijarDiasDeRetencion, purgarConversacionesViejas } from '../domain/retencion.js';
 
 export const insightsRouter = Router();
 
@@ -59,7 +60,7 @@ insightsRouter.get(
         ? Number((((today.revenue_cents - yesterday.revenue_cents) / yesterday.revenue_cents) * 100).toFixed(1))
         : null,
       kitchen: kitchenBoard().length,
-      open_orders: listOrders({ statuses: ['confirmado', 'en_preparacion'] }).length,
+      open_orders: contarOrdenes({ statuses: ['confirmado', 'en_preparacion'] }),
       stock_alerts: alerts.slice(0, 8),
       stock_alert_counts: {
         agotado: alerts.filter((a) => a.level === 'agotado').length,
@@ -118,4 +119,30 @@ insightsRouter.put(
     for (const [key, value] of Object.entries(body)) setSetting(key, value);
     return allSettings();
   }),
+);
+
+// ── Retención de conversaciones ─────────────────────────────────────────────
+
+/**
+ * Los mensajes del chat traen lo que la gente escribió: nombres, teléfonos,
+ * direcciones. Esta pantalla es para que el local decida cuánto los guarda, en
+ * vez de acumularlos para siempre sin haberlo decidido nunca.
+ */
+insightsRouter.get('/retencion', route(() => estadoDeRetencion()));
+
+insightsRouter.put(
+  '/retencion',
+  route((req) => {
+    const { dias } = z
+      .object({ dias: z.coerce.number().int().min(0).max(3650) })
+      .parse(req.body ?? {});
+    fijarDiasDeRetencion(dias);
+    return estadoDeRetencion();
+  }),
+);
+
+/** Borrar ahora lo que ya pasó el plazo, sin esperar al barrido diario. */
+insightsRouter.post(
+  '/retencion/purgar',
+  route(() => ({ ...purgarConversacionesViejas(), estado: estadoDeRetencion() })),
 );

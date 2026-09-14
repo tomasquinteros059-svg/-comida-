@@ -3,7 +3,7 @@ import { useApi } from '../lib/useApi';
 import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction, useToast } from '../lib/toast';
-import type { PurchaseOrder, Supplier } from '../lib/types';
+import type { PurchaseOrder, Supplier, Pagina } from '../lib/types';
 import { Badge, Card, Empty, Field, Modal, Spinner } from '../components/ui';
 import { moneyExact, timeAgo } from '../lib/format';
 
@@ -28,7 +28,7 @@ const URGENCY_TONE: Record<string, 'neutral' | 'warn' | 'danger'> = {
 };
 
 export function PurchasesPage() {
-  const orders = useApi<PurchaseOrder[]>('/procurement/purchase-orders', 30_000);
+  const orders = useApi<Pagina<PurchaseOrder>>('/procurement/purchase-orders?limite=50', 30_000);
   const suppliers = useApi<Supplier[]>('/procurement/suppliers');
   const run = useAction();
   const { notify } = useToast();
@@ -51,8 +51,8 @@ export function PurchasesPage() {
   if (orders.error) return <div className="banner danger">No pude cargar las compras: {orders.error}</div>;
   if (!orders.data || !suppliers.data) return <Spinner />;
 
-  const open = orders.data.filter((po) => !['recibida', 'cancelada'].includes(po.status));
-  const closed = orders.data.filter((po) => ['recibida', 'cancelada'].includes(po.status));
+  const open = orders.data.items.filter((po) => !['recibida', 'cancelada'].includes(po.status));
+  const closed = orders.data.items.filter((po) => ['recibida', 'cancelada'].includes(po.status));
 
   return (
     <div className="stack">
