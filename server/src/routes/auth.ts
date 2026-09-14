@@ -172,9 +172,15 @@ const cambioDeClaveBody = z.object({
  * Pide la clave actual aunque la sesión ya esté abierta: si no, alguien que
  * encuentra una pantalla sin bloquear se queda con la cuenta.
  */
+/**
+ * Se cuenta por persona, no por conexion: en un local todos salen por el mismo
+ * router, y con un limite por IP el que se equivoca tecleando su clave actual
+ * deja a sus compañeros sin poder cambiar la suya.
+ */
 const limiteDeCambio = rateLimit({
   windowMs: 60_000,
   max: config.loginRateMax,
+  key: (req) => resolverActor(req)?.id ?? req.ip ?? 'desconocido',
   message: 'Demasiados intentos. Esperá un minuto.',
 });
 

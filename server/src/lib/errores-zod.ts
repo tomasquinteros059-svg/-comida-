@@ -24,6 +24,17 @@ const TIPOS: Record<string, string> = {
   float: 'un número',
   null: 'nulo',
   undefined: 'nada',
+  // zod llama "nan" a un número que no se pudo leer. Decir "no nan" no le
+  // sirve a nadie: lo que pasó es que lo que vino no era un número.
+  nan: 'eso',
+  function: 'una función',
+  symbol: 'un símbolo',
+  map: 'un mapa',
+  set: 'un conjunto',
+  promise: 'una promesa',
+  unknown: 'eso',
+  never: 'eso',
+  void: 'nada',
 };
 
 const nombreDeTipo = (tipo: string) => TIPOS[tipo] ?? tipo;

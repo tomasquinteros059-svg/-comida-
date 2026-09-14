@@ -7,7 +7,7 @@ export const setAdminToken = (token: string) => localStorage.setItem(ADMIN_TOKEN
 export const clearAdminToken = () => localStorage.removeItem(ADMIN_TOKEN_KEY);
 
 /**
- * Qué hacer cuando el servidor dice que falta la credencial. Lo registra la
+ * Qué hacer cuando el servidor dice que la sesión no sirve. Lo registra la
  * aplicación para mostrar la pantalla de acceso: sin esto el panel cargaba y
  * todas las pantallas quedaban vacías sin explicar por qué.
  */
@@ -38,7 +38,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const isJson = response.headers.get('content-type')?.includes('application/json');
   const payload = isJson ? await response.json() : await response.text();
 
-  if (response.status === 401) alFaltarCredencial?.();
+  // Un 401 de /auth/ habla de la clave que se acaba de tipear, no de la
+  // sesión: equivocarse al escribir la clave actual no puede echar a nadie del
+  // panel. El resto de los 401 sí son la sesión que dejó de valer.
+  if (response.status === 401 && !path.startsWith('/auth/')) alFaltarCredencial?.();
 
   if (!response.ok) {
     const message =
