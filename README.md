@@ -47,7 +47,8 @@ modelo:
 | `ANTHROPIC_API_KEY` | Activa el chatbot con Claude. Sin ella funciona el motor determinista. |
 | `CHAT_MODEL` | Modelo a usar (por defecto `claude-sonnet-5`). |
 | `DATABASE_PATH` | Archivo SQLite. Relativo a la raíz del proyecto (por defecto `data/comeia.db`). |
-| `ADMIN_TOKEN` | Si está seteado, las rutas del panel piden `Authorization: Bearer <token>`. |
+| `ADMIN_TOKEN` | Autoriza el alta del primer dueño y sirve de llave de repuesto. Sin esto, el panel queda abierto (solo desarrollo). |
+| `LOGIN_RATE_MAX` | Intentos de ingreso por minuto para un mismo usuario (5). |
 | `CURRENCY`, `TIMEZONE` | Formato de importes y horarios del local. |
 
 ---
@@ -271,10 +272,31 @@ Cada archivo corre contra su propia base efímera.
 | `GET` | `/api/lagging`, `/api/menu-performance`, `/api/demand-gaps` | Reportes de carta. |
 | `GET/POST/PATCH` | `/api/knowledge` | Lo que el local le enseña al bot. |
 
-Con `ADMIN_TOKEN` seteado, todo pide la clave salvo las tres rutas públicas:
-mandar un mensaje al chat, el estado del servicio y qué motor está corriendo.
-Leer o listar conversaciones **no** es público: los mensajes traen lo que el
-cliente escribió.
+| `GET/POST/PATCH/DELETE` | `/api/usuarios` | Equipo del local y registro de cambios. Solo el dueño. |
+| `POST` | `/api/auth/login`, `/api/auth/logout` | Entrar y salir. |
+| `GET` | `/api/auth/me` | Con qué arranca el panel: si hay que crear el primer dueño, si hay que pedir la clave, o quién está adentro. |
+
+### Quién ve qué
+
+Cada persona del local entra con su usuario. Los roles están pensados por lo que
+cada uno necesita ver, no por jerarquía: la cocina no ve facturación porque no
+le sirve para cocinar, y ese es todo el criterio.
+
+| | ventas | carta | stock | compras | cocina | bot | usuarios |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| **dueño** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **encargado** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| **cocina** | | | | | ✓ | | |
+
+La navegación se arma con esos permisos, así que cada uno ve solo sus pantallas.
+
+Públicas son tres rutas: mandar un mensaje al chat, el estado del servicio y qué
+motor está corriendo. Leer o listar conversaciones **no** es público: los
+mensajes traen lo que el cliente escribió.
+
+La clave se guarda con scrypt y sal por usuario. La sesión viaja en una cookie
+`HttpOnly`, así un script inyectado en el panel no la puede leer. Cambiarle la
+clave a alguien, o darlo de baja, le cierra las sesiones abiertas en el acto.
 
 ---
 
@@ -297,7 +319,8 @@ las comandas coherentes.
 
 ## Lo que falta
 
-- Autenticación real con usuarios y roles (hoy hay un token compartido).
+- Que cada uno se pueda cambiar la clave solo: hoy, si alguien se la olvida,
+  se la tiene que cambiar el dueño desde **Usuarios**.
 - Multi-local: el esquema lo soporta, falta el `tenant_id` y el filtrado.
 - Canal de WhatsApp: el motor ya es agnóstico del canal, falta el webhook.
 - Ingesta de `.xlsx` y `.pdf`: hoy hay que exportar a CSV primero.

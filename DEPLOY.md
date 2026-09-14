@@ -122,10 +122,26 @@ enterarse de los cambios de stock al instante).
 
 ### 4. Primer arranque
 
-Entrá a tu dominio: el panel te va a pedir la clave (la misma del `ADMIN_TOKEN`).
-Queda guardada en ese dispositivo; el botón **Salir** en la barra de arriba la
-borra. El chat de los clientes funciona sin clave — la protección es solo para
-la gestión del local.
+Entrá a tu dominio. Como la base está vacía, el panel te pide crear **el primer
+usuario**: ese es el dueño, ve todo y desde **Usuarios** da de alta al resto del
+equipo. Para esa alta inicial te va a pedir el `ADMIN_TOKEN` una sola vez —sin
+eso, el primero que encontrara la dirección se quedaría con el local.
+
+De ahí en más cada persona entra con su usuario y su clave, y ve solo lo que le
+toca:
+
+| Rol | Qué ve |
+|---|---|
+| **dueño** | Todo, más la pantalla de usuarios. |
+| **encargado** | El local entero: ventas, carta, stock, compras, cocina y bot. Usuarios no. |
+| **cocina** | Solo el tablero de comandas. Ni precios ni facturación: no le sirven para cocinar. |
+
+Guardá el `ADMIN_TOKEN` donde guardarías la llave del local. Además de
+autorizar el alta inicial, es la llave de repuesto: si el dueño se queda
+afuera, se entra con eso desde **Entrar con el token maestro**.
+
+El chat de los clientes funciona sin clave — la protección es solo para la
+gestión del local.
 
 La base se crea vacía. **En un local real no corras el seed**: son los datos de
 una rotisería de ejemplo. En vez de eso, entrá al panel y subí tu carta desde
@@ -244,9 +260,14 @@ backup **antes**, no después.
 Esto anda y se puede usar. Pero hay cosas que todavía no están, y es mejor
 saberlas ahora que descubrirlas con el local funcionando:
 
-- **No hay usuarios, hay una sola clave.** Todos los empleados comparten el
-  mismo `ADMIN_TOKEN` y no queda registro de quién cambió qué. Si el local tiene
-  varias personas tocando la carta, esto es lo primero que hay que resolver.
+- **Nadie se puede cambiar la clave solo.** Cada uno entra con su usuario y
+  queda registrado quién cambió qué, pero si alguien se olvida la clave tiene
+  que pedirle al dueño que se la cambie desde **Usuarios**. No hay
+  "olvidé mi contraseña" por mail.
+- **La imagen de Docker nunca se construyó en un entorno real.** El
+  `Dockerfile` y el `docker-compose.yml` están escritos y revisados, pero la
+  primera build de verdad la vas a hacer vos. Reservá un rato para el primer
+  `docker compose up --build`.
 - **El chat es público.** Está limitado por IP, pero cualquiera con la URL puede
   conversar con el bot. Si tenés la clave de Anthropic puesta, eso es consumo.
   Empezá con el límite bajo y subilo mirando el uso real.
