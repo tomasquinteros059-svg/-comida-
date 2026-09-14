@@ -319,8 +319,8 @@ las comandas coherentes.
 
 ## Lo que falta
 
-- Que cada uno se pueda cambiar la clave solo: hoy, si alguien se la olvida,
-  se la tiene que cambiar el dueño desde **Usuarios**.
+- Recuperar la clave por mail: hoy cada uno se la puede cambiar desde el panel,
+  pero si la perdió del todo se la cambia el dueño desde **Usuarios**.
 - Multi-local: el esquema lo soporta, falta el `tenant_id` y el filtrado.
 - Canal de WhatsApp: el motor ya es agnóstico del canal, falta el webhook.
 - Ingesta de `.xlsx` y `.pdf`: hoy hay que exportar a CSV primero.

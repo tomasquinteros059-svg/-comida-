@@ -8,6 +8,8 @@ import {
   cerrarSesion,
   contarUsuarios,
   crearUsuario,
+  actualizarUsuario,
+  obtenerUsuario,
   permisosDe,
   registrar,
 } from '../domain/users.js';
@@ -154,5 +156,63 @@ authRouter.post(
       ip: req.ip ?? '',
     });
     return { usuario: dueño, permisos: permisosDe(dueño.role) };
+  }),
+);
+
+const cambioDeClaveBody = z.object({
+  actual: z.string().min(1, 'Poné tu clave actual'),
+  nueva: z.string().min(8, 'La clave nueva tiene que tener al menos 8 caracteres').max(200),
+});
+
+/**
+ * Cambiarse la clave uno mismo. Antes solo podía hacerlo el dueño desde
+ * Usuarios, así que el que se la olvidaba un domingo a la noche no entraba
+ * hasta que apareciera el dueño.
+ *
+ * Pide la clave actual aunque la sesión ya esté abierta: si no, alguien que
+ * encuentra una pantalla sin bloquear se queda con la cuenta.
+ */
+const limiteDeCambio = rateLimit({
+  windowMs: 60_000,
+  max: config.loginRateMax,
+  message: 'Demasiados intentos. Esperá un minuto.',
+});
+
+authRouter.post(
+  '/clave',
+  limiteDeCambio,
+  route(async (req, res) => {
+    const actor = resolverActor(req);
+    if (!actor) throw new HttpError(401, 'Necesitás iniciar sesión');
+    if (!actor.id) {
+      throw new HttpError(
+        409,
+        'Entraste con el token maestro, que no es un usuario. Para cambiar una clave, entrá con tu usuario o usá la pantalla de Usuarios.',
+      );
+    }
+
+    const { actual, nueva } = cambioDeClaveBody.parse(req.body);
+    const usuario = obtenerUsuario(actor.id);
+    if (!usuario) throw new HttpError(401, 'Necesitás iniciar sesión');
+
+    if (!(await autenticar(usuario.username, actual))) {
+      throw new HttpError(401, 'La clave actual no es esa');
+    }
+    if (actual === nueva) throw new HttpError(400, 'La clave nueva tiene que ser distinta de la actual');
+
+    // actualizarUsuario cierra todas las sesiones al cambiar la clave, la de
+    // este pedido incluida: se abre una nueva para no echar a quien la cambió.
+    await actualizarUsuario(usuario.id, { clave: nueva });
+    const token = abrirSesion(usuario, req.header('user-agent') ?? '');
+    ponerCookieDeSesion(res, token);
+
+    registrar({
+      user_id: usuario.id,
+      user_name: usuario.name,
+      role: usuario.role,
+      action: 'se cambió la clave',
+      ip: req.ip ?? '',
+    });
+    return { ok: true };
   }),
 );

@@ -11,6 +11,7 @@ import { authRouter } from './routes/auth.js';
 import { usuariosRouter } from './routes/usuarios.js';
 import { registrar } from './domain/users.js';
 import { describirPedido } from './lib/bitacora.js';
+import { usarMensajesEnCastellano } from './lib/errores-zod.js';
 import { chatAdminRouter, chatPublicRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
 import { ordersRouter } from './routes/orders.js';
@@ -23,6 +24,7 @@ import { eventStream } from './lib/events.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export function createApp() {
+  usarMensajesEnCastellano();
   db(); // crea el archivo y aplica el esquema en el arranque
 
   const app = express();

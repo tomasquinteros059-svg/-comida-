@@ -215,6 +215,144 @@ describe('qué alcanza cada rol por HTTP', () => {
   });
 });
 
+describe('cambiarse la clave uno mismo', () => {
+  it('cambia la clave y deja la sesión de este dispositivo abierta', async () => {
+    const cookie = await entrarComo('cocina', 'cocinero');
+    const res = await pedir('/api/auth/clave', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ actual: 'clave-de-prueba', nueva: 'la-clave-nueva-larga' }),
+    });
+    assert.equal(res.status, 200, await res.text());
+
+    // La sesión vieja seguiría valiendo si no se abriera una nueva: el que
+    // cambia su clave no puede quedar afuera por cambiarla.
+    const nueva = res.headers.get('set-cookie') ?? '';
+    assert.ok(nueva.startsWith('comeia_sesion='), 'tiene que venir una cookie nueva');
+    const cookieNueva = nueva.split(';')[0]!;
+    assert.equal((await pedir('/api/orders/kitchen', { headers: { cookie: cookieNueva } })).status, 200);
+
+    // Y la clave vieja ya no entra.
+    const conVieja = await pedir('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ usuario: 'cocinero', clave: 'clave-de-prueba' }),
+    });
+    assert.equal(conVieja.status, 401);
+    const conNueva = await pedir('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ usuario: 'cocinero', clave: 'la-clave-nueva-larga' }),
+    });
+    assert.equal(conNueva.status, 200);
+  });
+
+  it('cierra las sesiones de los otros dispositivos', async () => {
+    const enElCelular = await entrarComo('encargado', 'beto');
+    const enLaCaja = await pedir('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ usuario: 'beto', clave: 'clave-de-prueba' }),
+    }).then((r) => (r.headers.get('set-cookie') ?? '').split(';')[0]!);
+
+    await pedir('/api/auth/clave', {
+      method: 'POST',
+      headers: { cookie: enLaCaja },
+      body: JSON.stringify({ actual: 'clave-de-prueba', nueva: 'otra-clave-bien-larga' }),
+    });
+
+    assert.equal(
+      (await pedir('/api/dashboard', { headers: { cookie: enElCelular } })).status,
+      401,
+      'la sesión del otro dispositivo tiene que morir',
+    );
+  });
+
+  it('pide la clave actual aunque la sesión esté abierta', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    const res = await pedir('/api/auth/clave', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ actual: 'no-es-esta', nueva: 'la-clave-nueva-larga' }),
+    });
+    assert.equal(res.status, 401, 'si no, el que encuentra una pantalla abierta se queda con la cuenta');
+  });
+
+  it('no acepta una clave nueva corta ni igual a la actual', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    const corta = await pedir('/api/auth/clave', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ actual: 'clave-de-prueba', nueva: 'corta' }),
+    });
+    assert.equal(corta.status, 400);
+
+    const igual = await pedir('/api/auth/clave', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ actual: 'clave-de-prueba', nueva: 'clave-de-prueba' }),
+    });
+    assert.equal(igual.status, 400);
+  });
+
+  it('sin sesión no se puede', async () => {
+    const res = await pedir('/api/auth/clave', {
+      method: 'POST',
+      body: JSON.stringify({ actual: 'clave-de-prueba', nueva: 'la-clave-nueva-larga' }),
+    });
+    assert.equal(res.status, 401);
+  });
+
+  it('con el token maestro explica por qué no, en vez de romperse', async () => {
+    const res = await pedir('/api/auth/clave', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ actual: 'lo-que-sea', nueva: 'la-clave-nueva-larga' }),
+    });
+    assert.equal(res.status, 409);
+    assert.match((await res.json()).error, /token maestro/);
+  });
+});
+
+describe('mensajes de validación', () => {
+  it('salen en castellano y no en inglés', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    const res = await pedir('/api/menu/products', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ name: '' }),
+    });
+    assert.equal(res.status, 400);
+    const { issues } = await res.json();
+    const textos = issues.map((i: { detalle: string }) => i.detalle).join(' | ');
+    assert.ok(!/must contain|Required|Expected|String|Invalid/.test(textos), `salió en inglés: ${textos}`);
+    assert.match(textos, /vacío|Falta/);
+  });
+
+  it('una opción inválida dice cuáles son las válidas', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    const { createIngredient } = await import('../domain/stock.js');
+    const insumo = createIngredient({ name: 'Harina', unit: 'kg', stock_qty: 5 });
+    const res = await pedir(`/api/stock/ingredients/${insumo.id}/movements`, {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ delta: 1, reason: 'lo-que-sea' }),
+    });
+    assert.equal(res.status, 400);
+    const detalle = (await res.json()).issues[0].detalle;
+    assert.match(detalle, /no es una opción válida/);
+    assert.match(detalle, /merma/, 'tiene que listar las que sí valen');
+  });
+
+  it('un número donde va texto lo dice sin jerga', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    const res = await pedir('/api/menu/categories', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ name: 42 }),
+    });
+    assert.equal(res.status, 400);
+    assert.match((await res.json()).issues[0].detalle, /texto/);
+  });
+});
+
 describe('primer arranque', () => {
   it('avisa que no hay usuarios todavía', async () => {
     const estado = await pedir('/api/auth/me').then((r) => r.json());

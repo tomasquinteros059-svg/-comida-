@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useApi } from './lib/useApi';
 import { api, clearAdminToken, onUnauthorized } from './lib/api';
 import { Acceso } from './components/Acceso';
+import { CambiarClave } from './components/CambiarClave';
 import { Spinner } from './components/ui';
 import { leerSesion, type Permiso, type Sesion } from './lib/sesion';
 import { ProveedorDeSesion } from './lib/sesionContext';
@@ -68,6 +69,7 @@ export function App() {
 }
 
 function Panel({ sesion }: { sesion: Sesion }) {
+  const [cambiandoClave, setCambiandoClave] = useState(false);
   const permisos = sesion.permisos ?? [];
   const visibles = ROUTES.filter((r) => permisos.includes(r.permiso));
 
@@ -159,9 +161,17 @@ function Panel({ sesion }: { sesion: Sesion }) {
                 {dashboard.open_orders} en curso · {dashboard.today.orders} pedidos hoy
               </span>
             )}
-            <span className="small muted nowrap">
-              {sesion.usuario?.name} · {sesion.usuario?.role}
-            </span>
+            {sesion.usuario?.viaToken ? (
+              <span className="small muted nowrap">token maestro</span>
+            ) : (
+              <button
+                className="btn ghost small"
+                title="Cambiar mi clave"
+                onClick={() => setCambiandoClave(true)}
+              >
+                {sesion.usuario?.name} · {sesion.usuario?.role}
+              </button>
+            )}
             <button className="btn ghost small" title="Cerrar la sesión" onClick={salir}>
               Salir
             </button>
@@ -169,6 +179,7 @@ function Panel({ sesion }: { sesion: Sesion }) {
         </header>
         <div className="content">{current.render(sesion)}</div>
       </main>
+      {cambiandoClave && <CambiarClave onClose={() => setCambiandoClave(false)} />}
     </div>
   );
 }

@@ -217,14 +217,27 @@ En cron, todas las madrugadas:
 **Un backup que vive en el mismo disco que la base no es un backup.** Sincronizá
 la carpeta afuera del servidor (`rclone`, `scp`, S3).
 
-Restaurar es copiar el archivo de vuelta a `/app/data/comeia.db` con el servicio
-apagado:
+### Restaurar
 
 ```bash
-docker compose down
-docker compose cp ./backups/comeia-2026-09-09_0400.db comeia:/app/data/comeia.db
-docker compose up -d
+./deploy/restore.sh ./backups/comeia-2026-09-09_0400.db
 ```
+
+Copiar el archivo a mano **no alcanza**, y falla de la peor manera: `docker
+compose cp` lo deja como `root`, pero el proceso corre como `node`. El panel
+arranca, muestra la carta y los pedidos viejos —parece que salió bien— y falla
+apenas alguien intenta escribir algo: entrar, tomar un pedido, mover stock.
+
+El script hace las tres cosas que se pasan por alto:
+
+1. Revisa la copia **antes** de pisar lo que hay, y guarda lo anterior por si
+   restauraste la equivocada.
+2. Corrige el dueño del archivo y borra los `-wal`/`-shm` de la base anterior
+   (son de otra historia; si quedan, SQLite las mezcla).
+3. Al final comprueba que la base se pueda **escribir**, no solo leer.
+
+> Probá una restauración ahora, con el local todavía cerrado. Un backup que
+> nadie restauró no es un backup: es tranquilidad falsa.
 
 ---
 
@@ -245,6 +258,7 @@ backup **antes**, no después.
 | Síntoma | Qué mirar |
 | --- | --- |
 | No arranca | `docker compose logs comeia`. Si falta `ADMIN_TOKEN`, lo dice con todas las letras. |
+| Restauré un backup y el panel muestra los datos pero no deja tomar pedidos | Restauraste copiando el archivo a mano: quedó como `root` y el proceso corre como `node`. Usá `./deploy/restore.sh`, que corrige el dueño y lo comprueba. |
 | El panel pide la clave y no la acepta | Tiene que ser idéntica a la del `.env`; ojo con los espacios al copiarla. |
 | El bot no usa Claude | Los logs dicen `motor de chat`. Si dice "deterministico", falta `ANTHROPIC_API_KEY`. |
 | Todos los pedidos parecen venir de la misma IP | Falta `TRUST_PROXY=1`, y el límite del chat se está aplicando al proxy. |
@@ -260,14 +274,10 @@ backup **antes**, no después.
 Esto anda y se puede usar. Pero hay cosas que todavía no están, y es mejor
 saberlas ahora que descubrirlas con el local funcionando:
 
-- **Nadie se puede cambiar la clave solo.** Cada uno entra con su usuario y
-  queda registrado quién cambió qué, pero si alguien se olvida la clave tiene
-  que pedirle al dueño que se la cambie desde **Usuarios**. No hay
-  "olvidé mi contraseña" por mail.
-- **La imagen de Docker nunca se construyó en un entorno real.** El
-  `Dockerfile` y el `docker-compose.yml` están escritos y revisados, pero la
-  primera build de verdad la vas a hacer vos. Reservá un rato para el primer
-  `docker compose up --build`.
+- **No hay "olvidé mi contraseña" por mail.** Cada uno se puede cambiar la
+  clave desde el panel (tocá tu nombre arriba a la derecha), pero para eso hay
+  que acordarse de la actual. Si alguien la perdió del todo, se la cambia el
+  dueño desde **Usuarios**.
 - **El chat es público.** Está limitado por IP, pero cualquiera con la URL puede
   conversar con el bot. Si tenés la clave de Anthropic puesta, eso es consumo.
   Empezá con el límite bajo y subilo mirando el uso real.
