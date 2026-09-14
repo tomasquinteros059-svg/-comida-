@@ -297,9 +297,34 @@ export function receiveItem(itemId: string, receivedQty: number): void {
 
 // ── Reposicion automatica ───────────────────────────────────────────────────
 
+/**
+ * Lo que ya esta pedido y todavia no llego, por insumo.
+ *
+ * Sin esto, apretar "reponer" dos veces pide dos veces: el local se queda con
+ * cuarenta kilos de mozzarella porque alguien dudo si habia hecho clic. Y
+ * despues de mandarle la orden al proveedor pasa lo mismo, porque el stock
+ * sigue bajo hasta que la mercaderia entra por la puerta.
+ */
+export function pendingOnOrder(): Map<string, number> {
+  const filas = all<{ ingredient_id: string; pendiente: number }>(
+    `SELECT poi.ingredient_id, SUM(poi.qty - poi.received_qty) AS pendiente
+     FROM purchase_order_items poi
+     JOIN purchase_orders po ON po.id = poi.purchase_id
+     WHERE po.status IN ('borrador', 'enviada', 'confirmada')
+     GROUP BY poi.ingredient_id`,
+  );
+  return new Map(filas.map((f) => [f.ingredient_id, f.pendiente]));
+}
+
 export interface ReplenishmentPlan {
   urgency: Urgency;
   purchase_orders: PurchaseOrder[];
+  /**
+   * Insumos que estaban en alerta pero ya tienen una orden en camino, asi que
+   * no se vuelven a pedir. Van en la respuesta para que el local sepa por que
+   * no aparecen y no lo tome por un olvido.
+   */
+  already_ordered: { ingredient_id: string; ingredient_name: string; pending_qty: number }[];
   /** Insumos que hay que reponer pero no tienen proveedor cargado. */
   unsourced: { ingredient_id: string; ingredient_name: string; qty: number }[];
   /**
@@ -327,11 +352,28 @@ export function planReplenishment(
 ): ReplenishmentPlan {
   const urgency = options.urgency ?? 'express';
   const alerts = stockAlerts();
+  const enCamino = pendingOnOrder();
+  const already_ordered: ReplenishmentPlan['already_ordered'] = [];
+
+  /** Descuenta lo que ya viene en camino. Devuelve null si ya esta cubierto. */
+  const loQueFalta = (ingredient: { id: string; name: string }, qty: number) => {
+    const pendiente = enCamino.get(ingredient.id) ?? 0;
+    if (pendiente <= 0) return qty;
+    const resto = Number((qty - pendiente).toFixed(2));
+    if (resto > 0) return resto;
+    already_ordered.push({
+      ingredient_id: ingredient.id,
+      ingredient_name: ingredient.name,
+      pending_qty: pendiente,
+    });
+    return null;
+  };
 
   const needed = alerts
     .filter((a) => !options.ingredientIds || options.ingredientIds.includes(a.ingredient.id))
     .filter((a) => a.suggested_qty > 0)
-    .map((a) => ({ ingredient: a.ingredient, qty: a.suggested_qty }));
+    .map((a) => ({ ingredient: a.ingredient, qty: loQueFalta(a.ingredient, a.suggested_qty) }))
+    .filter((n): n is { ingredient: typeof n.ingredient; qty: number } => n.qty !== null);
 
   // Insumos pedidos a mano que quizas no estan en alerta todavia.
   for (const id of options.ingredientIds ?? []) {
@@ -344,7 +386,9 @@ export function planReplenishment(
     );
     if (!ing) continue;
     const target = Math.max(ing.par_qty, ing.min_qty * 2, ing.stock_qty + 1);
-    needed.push({ ingredient: ing as never, qty: Number((target - ing.stock_qty).toFixed(2)) });
+    const falta = loQueFalta(ing, Number((target - ing.stock_qty).toFixed(2)));
+    if (falta === null) continue;
+    needed.push({ ingredient: ing as never, qty: falta });
   }
 
   const bySupplier = new Map<string, PurchaseLineInput[]>();
@@ -397,7 +441,7 @@ export function planReplenishment(
     });
   });
 
-  return { urgency, purchase_orders, unsourced, delayed };
+  return { urgency, purchase_orders, already_ordered, unsourced, delayed };
 }
 
 /** Texto listo para pegar en WhatsApp/mail al proveedor. */

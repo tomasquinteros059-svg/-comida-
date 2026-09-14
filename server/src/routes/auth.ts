@@ -25,15 +25,32 @@ import { config } from '../config.js';
 export const authRouter = Router();
 
 /**
- * Probar claves es barato para quien ataca y caro para el local. Cinco
- * intentos por minuto y por IP alcanzan para el que se equivoco escribiendo y
- * no para el que prueba un diccionario.
+ * Probar claves es barato para quien ataca y caro para el local, pero el
+ * limite se cuenta por usuario y no solo por IP: en un local todos salen por
+ * el mismo router, y con un limite por IP el pibe nuevo que se equivoca cuatro
+ * veces deja afuera a todo el turno.
  */
-const limiteDeIngreso = rateLimit({
+const limitePorUsuario = rateLimit({
   windowMs: 60_000,
   max: config.loginRateMax,
-  message: 'Demasiados intentos. Esperá un minuto.',
+  key: (req) => {
+    const usuario = typeof req.body?.usuario === 'string' ? req.body.usuario.toLowerCase() : '';
+    return `${req.ip ?? 'desconocido'}|${usuario}`;
+  },
+  message: 'Demasiados intentos con ese usuario. Esperá un minuto.',
 });
+
+/**
+ * Techo por IP, mucho mas alto. No esta para frenar a quien se equivoca
+ * escribiendo sino a quien prueba nombres de usuario de a cientos.
+ */
+const limitePorIp = rateLimit({
+  windowMs: 60_000,
+  max: config.loginRateMax * 8,
+  message: 'Demasiados intentos desde esta conexión. Esperá un minuto.',
+});
+
+const limiteDeIngreso = [limitePorIp, limitePorUsuario];
 
 const ingresoBody = z.object({
   usuario: z.string().min(1, 'Falta el usuario').max(80),
@@ -42,7 +59,7 @@ const ingresoBody = z.object({
 
 authRouter.post(
   '/login',
-  limiteDeIngreso,
+  ...limiteDeIngreso,
   route(async (req, res) => {
     const { usuario, clave } = ingresoBody.parse(req.body);
     const encontrado = await autenticar(usuario, clave);
@@ -109,7 +126,7 @@ const bootstrapBody = z.object({
  */
 authRouter.post(
   '/bootstrap',
-  limiteDeIngreso,
+  ...limiteDeIngreso,
   route(async (req, res) => {
     const body = bootstrapBody.parse(req.body);
     if (contarUsuarios() > 0) throw new HttpError(409, 'El local ya tiene usuarios dados de alta');

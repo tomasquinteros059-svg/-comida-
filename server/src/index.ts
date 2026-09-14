@@ -10,6 +10,7 @@ import { requireAuth, requireAuthStream, requirePermiso, type Actor } from './li
 import { authRouter } from './routes/auth.js';
 import { usuariosRouter } from './routes/usuarios.js';
 import { registrar } from './domain/users.js';
+import { describirPedido } from './lib/bitacora.js';
 import { chatAdminRouter, chatPublicRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
 import { ordersRouter } from './routes/orders.js';
@@ -148,6 +149,9 @@ function auditarCambios(req: Request, res: Response, next: NextFunction) {
   if (req.path.startsWith('/usuarios') || req.path.startsWith('/auth')) return next();
 
   const actor: Actor | undefined = req.actor;
+  // La ruta se lee ahora: despues de responder, un borrado ya no deja buscar
+  // el nombre de lo que se borro.
+  const { action, target } = describirPedido(req.method, `${req.baseUrl}${req.path}`.replace(/^\/api/, ''), req.body);
   res.on('finish', () => {
     if (res.statusCode >= 400) return;
     try {
@@ -155,7 +159,8 @@ function auditarCambios(req: Request, res: Response, next: NextFunction) {
         user_id: actor?.id ?? null,
         user_name: actor?.name ?? 'sistema',
         role: actor?.role ?? '',
-        action: `${req.method} ${req.baseUrl}${req.path}`,
+        action,
+        target,
         ip: req.ip ?? '',
       });
     } catch {

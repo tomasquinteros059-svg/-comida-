@@ -264,12 +264,30 @@ describe('registro de cambios', () => {
       headers: { cookie },
       body: JSON.stringify({ name: 'Pizzas' }),
     });
-    const filas = users.listarAuditoria() as Array<{ user_name: string; action: string }>;
+    const filas = users.listarAuditoria() as Array<{ user_name: string; action: string; target: string }>;
     assert.ok(filas.some((f) => f.action === 'ingreso' && f.user_name === 'ana'));
-    assert.ok(
-      filas.some((f) => f.action.includes('POST') && f.action.includes('/menu/categories')),
-      `no quedó registrado el alta: ${JSON.stringify(filas.slice(0, 3))}`,
+    // El registro lo lee el dueño del local: tiene que decir qué pasó, no la
+    // ruta HTTP que se llamó.
+    const alta = filas.find((f) => f.action.includes('categoría'));
+    assert.ok(alta, `no quedó registrado el alta: ${JSON.stringify(filas.slice(0, 3))}`);
+    assert.equal(alta!.action, 'dio de alta una categoría');
+    assert.equal(alta!.target, 'Pizzas');
+  });
+
+  it('el registro nombra las cosas, no los identificadores', async () => {
+    const cookie = await entrarComo('dueño', 'ana');
+    const { createIngredient } = await import('../domain/stock.js');
+    const insumo = createIngredient({ name: 'Mozzarella', unit: 'kg', stock_qty: 5 });
+    await pedir(`/api/stock/ingredients/${insumo.id}/movements`, {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify({ delta: -2, reason: 'merma' }),
+    });
+    const fila = (users.listarAuditoria() as Array<{ action: string; target: string }>).find((f) =>
+      f.action.includes('stock'),
     );
+    assert.equal(fila?.action, 'ajustó el stock de un insumo');
+    assert.equal(fila?.target, 'Mozzarella', 'tiene que decir Mozzarella, no ing_01M2...');
   });
 
   it('no anota lo que salió mal', async () => {
@@ -280,6 +298,6 @@ describe('registro de cambios', () => {
       body: JSON.stringify({ name: 'Pizzas' }),
     });
     const filas = users.listarAuditoria() as Array<{ action: string }>;
-    assert.ok(!filas.some((f) => f.action.includes('/menu/categories')));
+    assert.ok(!filas.some((f) => f.action.includes('categoría')));
   });
 });
