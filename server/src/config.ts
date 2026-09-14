@@ -40,6 +40,12 @@ export const config = {
    * internet directo: si no, cualquiera falsea su IP y esquiva el limite.
    */
   trustProxy: Number(process.env.TRUST_PROXY ?? 0),
+  /**
+   * Intentos de ingreso por minuto y por IP. Cinco alcanzan para el que se
+   * equivoco escribiendo y no para el que prueba un diccionario. Se puede
+   * subir en desarrollo o en las pruebas.
+   */
+  loginRateMax: Number(process.env.LOGIN_RATE_MAX ?? 5),
   chatRateLimit: {
     windowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 60_000),
     max: Number(process.env.CHAT_RATE_MAX ?? 20),

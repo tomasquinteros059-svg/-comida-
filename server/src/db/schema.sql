@@ -263,3 +263,50 @@ CREATE TABLE IF NOT EXISTS demand_signals (
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_signals_date ON demand_signals(created_at);
+
+-- ── Usuarios, sesiones y registro de cambios ────────────────────────────────
+--
+-- Tres roles, pensados por lo que cada uno necesita ver:
+--   dueño      todo, incluido quien entra y las ventas
+--   encargado  la operacion: carta, stock, compras, cocina y el bot
+--   cocina     solo el tablero de comandas; no ve precios ni facturacion
+CREATE TABLE IF NOT EXISTS users (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  username      TEXT NOT NULL UNIQUE,      -- siempre en minuscula
+  password_hash TEXT NOT NULL,             -- scrypt: salt$hash
+  role          TEXT NOT NULL,             -- dueño | encargado | cocina
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  last_login_at TEXT
+);
+
+-- La sesion se guarda hasheada: si alguien se lleva la base, no se lleva las
+-- sesiones abiertas.
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash   TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at   TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  user_agent   TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_exp  ON sessions(expires_at);
+
+-- Quien cambio que. Guarda el nombre ademas del id: si el usuario se borra, el
+-- registro tiene que seguir diciendo quien fue.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT,
+  user_name  TEXT NOT NULL DEFAULT 'sistema',
+  role       TEXT NOT NULL DEFAULT '',
+  action     TEXT NOT NULL,
+  target     TEXT NOT NULL DEFAULT '',
+  detail     TEXT NOT NULL DEFAULT '',
+  ip         TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id, created_at);

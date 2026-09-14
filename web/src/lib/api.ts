@@ -26,6 +26,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const token = getAdminToken();
   const response = await fetch(`/api${path}`, {
     method,
+    // La sesion viaja en una cookie HttpOnly: sin esto el navegador no la manda.
+    credentials: 'same-origin',
     headers: {
       ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       ...(token ? { authorization: `Bearer ${token}` } : {}),

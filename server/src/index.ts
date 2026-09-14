@@ -5,9 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config, configProblems, hasLLM, isProduction } from './config.js';
 import { closeDb, db } from './db/index.js';
-import { rateLimit } from './lib/rateLimit.js';
-import { createHash, timingSafeEqual } from 'node:crypto';
-import { errorHandler, HttpError } from './lib/http.js';
+import { errorHandler } from './lib/http.js';
+import { requireAuth, requireAuthStream, requirePermiso, type Actor } from './lib/auth.js';
+import { authRouter } from './routes/auth.js';
+import { usuariosRouter } from './routes/usuarios.js';
+import { registrar } from './domain/users.js';
 import { chatAdminRouter, chatPublicRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
 import { ordersRouter } from './routes/orders.js';
@@ -52,23 +54,46 @@ export function createApp() {
   // en el guard de mas abajo.
   app.use('/api/chat', chatPublicRouter);
 
+  // Entrar, salir y preguntar quien soy: publico por definicion, porque el
+  // panel lo llama antes de tener sesion.
+  app.use('/api/auth', authRouter);
+
   // Stream de cambios del local: el panel y el chat se enteran al instante de
   // un movimiento de stock en vez de esperar al proximo refresco.
   // Va antes del guard general porque EventSource no puede mandar cabeceras:
   // el token viaja por query string, y por eso este stream solo emite el tipo
   // de cambio y una etiqueta corta, nunca datos del pedido.
-  app.get('/api/events', requireAdminStream, eventStream);
+  app.get('/api/events', requireAuthStream, eventStream);
 
-  app.use('/api', requireAdmin);
+  app.use('/api', requireAuth);
+  app.use('/api', auditarCambios);
 
+  // Cada pantalla pide su permiso. El criterio esta en domain/users.ts: la
+  // cocina ve comandas y nada mas, no porque no se le tenga confianza sino
+  // porque la facturacion no le sirve para cocinar.
   // Leer o listar conversaciones es del local: los mensajes traen lo que el
   // cliente escribio, y eso no puede quedar del lado publico.
-  app.use('/api/chat', chatAdminRouter);
-  app.use('/api/menu', menuRouter);
-  app.use('/api/orders', ordersRouter);
-  app.use('/api/stock', stockRouter);
-  app.use('/api/procurement', procurementRouter);
-  app.use('/api/ingest', ingestRouter);
+  app.use('/api/chat', requirePermiso('bot'), chatAdminRouter);
+  app.use('/api/menu', requirePermiso('carta'), menuRouter);
+  app.use('/api/orders', requirePermiso('cocina'), ordersRouter);
+  app.use('/api/stock', requirePermiso('stock'), stockRouter);
+  app.use('/api/procurement', requirePermiso('compras'), procurementRouter);
+  app.use('/api/ingest', requirePermiso('carta'), ingestRouter);
+  app.use('/api/usuarios', requirePermiso('usuarios'), usuariosRouter);
+
+  // insightsRouter junta varias pantallas bajo /api, asi que el permiso se
+  // pone por camino antes de montarlo.
+  for (const camino of ['/api/dashboard', '/api/sales', '/api/menu-performance', '/api/lagging']) {
+    app.use(camino, requirePermiso('ventas'));
+  }
+  for (const camino of ['/api/knowledge', '/api/demand-gaps']) {
+    app.use(camino, requirePermiso('bot'));
+  }
+  // Los ajustes los lee todo el mundo (moneda, huso, nombre del local) y los
+  // cambia quien maneja el negocio.
+  app.use('/api/settings', (req, res, next) =>
+    req.method === 'GET' ? next() : requirePermiso('ventas')(req, res, next),
+  );
   app.use('/api', insightsRouter);
 
   // En produccion el panel se sirve desde el mismo proceso.
@@ -112,38 +137,32 @@ function corsPolicy() {
   return cors({ origin: config.allowedOrigins, credentials: false });
 }
 
-/** Igual que requireAdmin, pero acepta el token por query string (SSE). */
-function requireAdminStream(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!config.adminToken) return next();
-  if (typeof req.query.token === 'string' && sameToken(req.query.token, config.adminToken)) {
-    return next();
-  }
-  return requireAdmin(req, res, next);
-}
-
-/** Proteccion simple del panel. Si no hay ADMIN_TOKEN configurado, pasa todo. */
-function requireAdmin(req: express.Request, _res: express.Response, next: express.NextFunction) {
-  if (!config.adminToken) return next();
-  const header = req.header('authorization') ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : req.header('x-admin-token');
-  if (sameToken(token, config.adminToken)) return next();
-  next(new HttpError(401, 'Falta el token de administración'));
-}
-
 /**
- * Compara el token sin que el tiempo delate cuantos caracteres acerto. Con
- * `===` la comparacion corta en la primera diferencia, y midiendo esa demora
- * se puede reconstruir el token de a un byte.
+ * Deja constancia de todo lo que cambia algo. Se engancha al final del pedido
+ * para anotar solo lo que salio bien: un intento rechazado no es un cambio.
+ * Las rutas de usuarios y de ingreso escriben su propio detalle, y por eso se
+ * saltean aca.
  */
-function sameToken(recibido: string | undefined, esperado: string): boolean {
-  if (!recibido) return false;
-  const a = Buffer.from(recibido);
-  const b = Buffer.from(esperado);
-  // timingSafeEqual exige el mismo largo; el hash iguala los tamanios sin
-  // filtrar cual era el largo correcto.
-  const ha = createHash('sha256').update(a).digest();
-  const hb = createHash('sha256').update(b).digest();
-  return timingSafeEqual(ha, hb);
+function auditarCambios(req: Request, res: Response, next: NextFunction) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (req.path.startsWith('/usuarios') || req.path.startsWith('/auth')) return next();
+
+  const actor: Actor | undefined = req.actor;
+  res.on('finish', () => {
+    if (res.statusCode >= 400) return;
+    try {
+      registrar({
+        user_id: actor?.id ?? null,
+        user_name: actor?.name ?? 'sistema',
+        role: actor?.role ?? '',
+        action: `${req.method} ${req.baseUrl}${req.path}`,
+        ip: req.ip ?? '',
+      });
+    } catch {
+      // Anotar no puede tumbar un pedido que ya se respondio bien.
+    }
+  });
+  next();
 }
 
 const isMain = process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`;
