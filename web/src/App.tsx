@@ -4,6 +4,7 @@ import { api, clearAdminToken, onUnauthorized } from './lib/api';
 import { Acceso } from './components/Acceso';
 import { Spinner } from './components/ui';
 import { leerSesion, type Permiso, type Sesion } from './lib/sesion';
+import { ProveedorDeSesion } from './lib/sesionContext';
 import { useLive } from './lib/useLive';
 import type { Dashboard } from './lib/types';
 import { DashboardPage } from './pages/Dashboard';
@@ -59,7 +60,11 @@ export function App() {
   if (!sesion) return <div className="acceso"><Spinner /></div>;
   if (!sesion.autenticado || expirada) return <Acceso sesion={sesion} expirada={expirada} />;
 
-  return <Panel sesion={sesion} />;
+  return (
+    <ProveedorDeSesion sesion={sesion}>
+      <Panel sesion={sesion} />
+    </ProveedorDeSesion>
+  );
 }
 
 function Panel({ sesion }: { sesion: Sesion }) {

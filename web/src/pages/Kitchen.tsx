@@ -6,6 +6,7 @@ import { useAction } from '../lib/toast';
 import type { Order } from '../lib/types';
 import { Badge, Card, Empty, Modal, Spinner } from '../components/ui';
 import { SERVICE_LABEL, STATUS_LABEL, money, parseDate, stamp } from '../lib/format';
+import { usePermiso } from '../lib/sesionContext';
 
 const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   confirmado: { status: 'en_preparacion', label: 'Empezar' },
@@ -152,6 +153,10 @@ export function KitchenPage() {
 
 function RecentOrders() {
   const { data } = useApi<Order[]>('/orders?status=entregado,cancelado&limit=12', 30_000);
+  // La cocina no ve facturacion: el tablero le sirve igual sin la columna de
+  // plata, y esa es justamente la parte que no le corresponde.
+  const conPlata = usePermiso('ventas');
+
   if (!data?.length) return null;
   return (
     <Card title="Cerrados recientemente" tight>
@@ -163,7 +168,7 @@ function RecentOrders() {
               <th>Hora</th>
               <th>Canal</th>
               <th>Detalle</th>
-              <th className="num">Total</th>
+              {conPlata && <th className="num">Total</th>}
               <th>Estado</th>
             </tr>
           </thead>
@@ -176,7 +181,7 @@ function RecentOrders() {
                 <td className="small muted">
                   {order.items.map((i) => `${i.qty}× ${i.product_name}`).join(', ') || '—'}
                 </td>
-                <td className="num">{money(order.total_cents)}</td>
+                {conPlata && <td className="num">{money(order.total_cents)}</td>}
                 <td>
                   <Badge tone={order.status === 'entregado' ? 'ok' : 'danger'}>
                     {STATUS_LABEL[order.status] ?? order.status}
