@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
+import { config } from '../config.js';
 
 export class HttpError extends Error {
   constructor(
@@ -39,7 +40,33 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof HttpError) {
     return res.status(err.status).json({ error: err.message, details: err.details ?? undefined });
   }
+
+  // Un cuerpo mal formado es culpa de quien lo mando, no del servidor, y
+  // devolver 500 invita a insistir.
+  if (isBodyParseError(err)) {
+    return res.status(400).json({ error: 'El contenido enviado no es válido' });
+  }
+
   console.error('[error]', err);
-  const message = err instanceof Error ? err.message : 'Error interno';
+
+  // En produccion el mensaje interno no sale: un error de SQLite trae la
+  // consulta y la ruta del archivo, que es justo lo que no queremos regalar.
+  const message =
+    config.env === 'production'
+      ? 'Error interno'
+      : err instanceof Error
+        ? err.message
+        : 'Error interno';
   return res.status(500).json({ error: message });
+}
+
+/** Errores que tira body-parser cuando el JSON viene roto o es muy grande. */
+function isBodyParseError(err: unknown): boolean {
+  const candidate = err as { type?: string; status?: number };
+  return (
+    typeof candidate?.type === 'string' &&
+    ['entity.parse.failed', 'entity.too.large', 'encoding.unsupported', 'request.aborted'].includes(
+      candidate.type,
+    )
+  );
 }

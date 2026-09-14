@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { config, configProblems, hasLLM, isProduction } from './config.js';
 import { closeDb, db } from './db/index.js';
 import { rateLimit } from './lib/rateLimit.js';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { errorHandler, HttpError } from './lib/http.js';
-import { chatRouter } from './routes/chat.js';
+import { chatAdminRouter, chatPublicRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
 import { ordersRouter } from './routes/orders.js';
 import { stockRouter } from './routes/stock.js';
@@ -29,8 +30,13 @@ export function createApp() {
 
   app.use(securityHeaders);
   app.use(corsPolicy());
-  // El limite alto es para la ingesta de planillas; la valida su propia ruta.
-  app.use(express.json({ limit: '4mb' }));
+  // El cuerpo grande se admite solo donde hace falta: las planillas de la
+  // ingesta. Va montado primero porque body-parser no vuelve a leer un cuerpo
+  // ya parseado, asi que el limite chico de abajo lo saltea.
+  app.use('/api/ingest', express.json({ limit: '4mb' }));
+  // Todo lo demas, incluida la ruta publica del chat: un mensaje son dos mil
+  // caracteres, no cuatro megas.
+  app.use(express.json({ limit: '64kb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -41,16 +47,10 @@ export function createApp() {
     });
   });
 
-  // El chat es publico (lo usa el cliente final); el resto es del local.
-  // Va con limite: cada turno puede costar una llamada al modelo.
-  app.use(
-    '/api/chat',
-    rateLimit({
-      ...config.chatRateLimit,
-      message: 'Estas escribiendo muy rapido. Espera unos segundos y volve a intentar.',
-    }),
-    chatRouter,
-  );
+  // Mandar un mensaje y preguntar por el motor es lo unico publico del chat.
+  // El router deja pasar lo que no reconoce, asi que el resto de /api/chat cae
+  // en el guard de mas abajo.
+  app.use('/api/chat', chatPublicRouter);
 
   // Stream de cambios del local: el panel y el chat se enteran al instante de
   // un movimiento de stock en vez de esperar al proximo refresco.
@@ -61,6 +61,9 @@ export function createApp() {
 
   app.use('/api', requireAdmin);
 
+  // Leer o listar conversaciones es del local: los mensajes traen lo que el
+  // cliente escribio, y eso no puede quedar del lado publico.
+  app.use('/api/chat', chatAdminRouter);
   app.use('/api/menu', menuRouter);
   app.use('/api/orders', ordersRouter);
   app.use('/api/stock', stockRouter);
@@ -112,7 +115,9 @@ function corsPolicy() {
 /** Igual que requireAdmin, pero acepta el token por query string (SSE). */
 function requireAdminStream(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!config.adminToken) return next();
-  if (req.query.token === config.adminToken) return next();
+  if (typeof req.query.token === 'string' && sameToken(req.query.token, config.adminToken)) {
+    return next();
+  }
   return requireAdmin(req, res, next);
 }
 
@@ -121,8 +126,24 @@ function requireAdmin(req: express.Request, _res: express.Response, next: expres
   if (!config.adminToken) return next();
   const header = req.header('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : req.header('x-admin-token');
-  if (token === config.adminToken) return next();
+  if (sameToken(token, config.adminToken)) return next();
   next(new HttpError(401, 'Falta el token de administración'));
+}
+
+/**
+ * Compara el token sin que el tiempo delate cuantos caracteres acerto. Con
+ * `===` la comparacion corta en la primera diferencia, y midiendo esa demora
+ * se puede reconstruir el token de a un byte.
+ */
+function sameToken(recibido: string | undefined, esperado: string): boolean {
+  if (!recibido) return false;
+  const a = Buffer.from(recibido);
+  const b = Buffer.from(esperado);
+  // timingSafeEqual exige el mismo largo; el hash iguala los tamanios sin
+  // filtrar cual era el largo correcto.
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb);
 }
 
 const isMain = process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`;

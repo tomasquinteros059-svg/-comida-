@@ -202,18 +202,27 @@ function buildDraft(content: string, kindHint?: ImportKind): Draft {
   const kind = kindHint ?? detectKind(table);
   const draft: Draft = { kind, products: [], ingredients: [], knowledge: [], issues: [], rows_read: 0 };
 
+  // Lo que ya existe se lee una sola vez y se indexa por nombre normalizado.
+  // Antes se consultaba la base en cada fila: con una planilla larga eso son
+  // miles de consultas y el proceso queda bloqueado mientras tanto.
+  const porNombre = <T extends { name?: string; topic?: string }>(items: T[]) =>
+    new Map(items.map((item) => [normalize(item.name ?? item.topic ?? ''), item]));
+
+  const productosExistentes = kind === 'carta' ? porNombre(listProducts()) : new Map();
+  const insumosExistentes = kind === 'insumos' ? porNombre(listIngredients()) : new Map();
+  const conocimientoExistente = kind === 'conocimiento' ? porNombre(listKnowledge()) : new Map();
+
   if (kind === 'conocimiento' && !table) {
     // Texto libre: cada bloque separado por linea en blanco es una entrada, y
     // un titulo markdown ("## Delivery") nombra el tema.
     const blocks = content.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
-    const existing = listKnowledge();
     blocks.forEach((block, index) => {
       const lines = block.split('\n');
       const heading = lines[0]!.match(/^#{1,6}\s*(.+)$/);
       const topic = heading ? heading[1]!.trim() : lines[0]!.slice(0, 60).trim();
       const body = heading ? lines.slice(1).join('\n').trim() : block;
       if (!body) return;
-      const match = existing.find((e) => normalize(e.topic) === normalize(topic));
+      const match = conocimientoExistente.get(normalize(topic));
       draft.knowledge.push({ row: index + 1, topic, content: body, existingId: match?.id ?? null });
     });
     draft.rows_read = blocks.length;
@@ -243,7 +252,7 @@ function buildDraft(content: string, kindHint?: ImportKind): Draft {
         return;
       }
       const cost = parseAmount(pick(row, 'costo', 'costo_plato', 'cmv'));
-      const existing = listProducts().find((p) => normalize(p.name) === normalize(name));
+      const existing = productosExistentes.get(normalize(name));
       draft.products.push({
         row: line,
         name,
@@ -260,7 +269,7 @@ function buildDraft(content: string, kindHint?: ImportKind): Draft {
     }
 
     if (kind === 'insumos') {
-      const existing = listIngredients().find((i) => normalize(i.name) === normalize(name));
+      const existing = insumosExistentes.get(normalize(name));
       const cost = parseAmount(pick(row, 'costo', 'precio', 'costo_unitario'));
       draft.ingredients.push({
         row: line,

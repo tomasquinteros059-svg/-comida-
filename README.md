@@ -257,7 +257,7 @@ Cada archivo corre contra su propia base efímera.
 
 | Método | Ruta | Qué hace |
 | --- | --- | --- |
-| `POST` | `/api/chat` | Un turno de conversación. Público. |
+| `POST` | `/api/chat` | Un turno de conversación. **La única ruta pública** junto con `/api/health` y `/api/chat/engine`. |
 | `GET` | `/api/dashboard` | Todo lo de la pantalla principal en una llamada. |
 | `GET` | `/api/orders/kitchen` | Tablero de cocina. |
 | `POST` | `/api/orders/:id/status` | Avanza el pedido. |
@@ -271,7 +271,10 @@ Cada archivo corre contra su propia base efímera.
 | `GET` | `/api/lagging`, `/api/menu-performance`, `/api/demand-gaps` | Reportes de carta. |
 | `GET/POST/PATCH` | `/api/knowledge` | Lo que el local le enseña al bot. |
 
-Con `ADMIN_TOKEN` seteado, todo salvo `/api/chat` y `/api/health` pide el token.
+Con `ADMIN_TOKEN` seteado, todo pide la clave salvo las tres rutas públicas:
+mandar un mensaje al chat, el estado del servicio y qué motor está corriendo.
+Leer o listar conversaciones **no** es público: los mensajes traen lo que el
+cliente escribió.
 
 ---
 

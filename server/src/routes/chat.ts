@@ -11,9 +11,21 @@ import {
   rateMessage,
 } from '../domain/conversations.js';
 import { priceCart } from '../domain/orders.js';
-import { hasLLM } from '../config.js';
+import { config, hasLLM } from '../config.js';
+import { rateLimit } from '../lib/rateLimit.js';
 
-export const chatRouter = Router();
+/**
+ * Lo que puede llamar cualquiera desde internet: mandar un mensaje y saber que
+ * motor esta corriendo. Nada mas.
+ */
+export const chatPublicRouter = Router();
+
+/**
+ * La gestion de las conversaciones es del local, no del cliente: los mensajes
+ * traen lo que la gente escribio (nombres, telefonos, direcciones) y no pueden
+ * quedar del lado publico.
+ */
+export const chatAdminRouter = Router();
 
 const chatBody = z.object({
   conversation_id: z.string().optional(),
@@ -22,8 +34,20 @@ const chatBody = z.object({
   customer_name: z.string().optional(),
 });
 
-chatRouter.post(
+/**
+ * Cada turno puede costar una llamada al modelo. Sin limite, cualquiera con un
+ * bucle vacia el presupuesto del local en una tarde. Va sobre el POST y no
+ * sobre todo /api/chat, para que el panel del local no gaste el cupo del
+ * cliente cuando refresca las conversaciones.
+ */
+const limiteDelChat = rateLimit({
+  ...config.chatRateLimit,
+  message: 'Estas escribiendo muy rapido. Espera unos segundos y volve a intentar.',
+});
+
+chatPublicRouter.post(
   '/',
+  limiteDelChat,
   route(async (req) => {
     const body = chatBody.parse(req.body);
     const conversationId =
@@ -33,17 +57,17 @@ chatRouter.post(
   }),
 );
 
-chatRouter.post(
+chatAdminRouter.post(
   '/conversations',
   route((req) => createConversation(req.body ?? {})),
 );
 
-chatRouter.get(
+chatAdminRouter.get(
   '/conversations',
   route(() => listConversations()),
 );
 
-chatRouter.get(
+chatAdminRouter.get(
   '/conversations/:id',
   route((req) => {
     const conversation = getConversationOrThrow(req.params.id!);
@@ -52,7 +76,7 @@ chatRouter.get(
   }),
 );
 
-chatRouter.post(
+chatAdminRouter.post(
   '/messages/:id/rating',
   route((req) => {
     const { rating } = z.object({ rating: z.union([z.literal(1), z.literal(-1)]) }).parse(req.body);
@@ -62,12 +86,12 @@ chatRouter.post(
 );
 
 /** Mensajes marcados como malos: la cola de trabajo para mejorar el bot. */
-chatRouter.get(
+chatAdminRouter.get(
   '/flagged',
   route(() => flaggedMessages()),
 );
 
-chatRouter.get(
+chatPublicRouter.get(
   '/engine',
   route(() => ({ engine: hasLLM() ? 'llm' : 'deterministico' })),
 );

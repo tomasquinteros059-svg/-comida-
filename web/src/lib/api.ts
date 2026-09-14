@@ -4,6 +4,17 @@ const ADMIN_TOKEN_KEY = 'comeia.adminToken';
 
 export const getAdminToken = () => localStorage.getItem(ADMIN_TOKEN_KEY) ?? '';
 export const setAdminToken = (token: string) => localStorage.setItem(ADMIN_TOKEN_KEY, token);
+export const clearAdminToken = () => localStorage.removeItem(ADMIN_TOKEN_KEY);
+
+/**
+ * Qué hacer cuando el servidor dice que falta la credencial. Lo registra la
+ * aplicación para mostrar la pantalla de acceso: sin esto el panel cargaba y
+ * todas las pantallas quedaban vacías sin explicar por qué.
+ */
+let alFaltarCredencial: (() => void) | null = null;
+export const onUnauthorized = (handler: () => void) => {
+  alFaltarCredencial = handler;
+};
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string, readonly details?: unknown) {
@@ -24,6 +35,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   const isJson = response.headers.get('content-type')?.includes('application/json');
   const payload = isJson ? await response.json() : await response.text();
+
+  if (response.status === 401) alFaltarCredencial?.();
 
   if (!response.ok) {
     const message =

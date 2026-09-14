@@ -122,6 +122,11 @@ enterarse de los cambios de stock al instante).
 
 ### 4. Primer arranque
 
+Entrá a tu dominio: el panel te va a pedir la clave (la misma del `ADMIN_TOKEN`).
+Queda guardada en ese dispositivo; el botón **Salir** en la barra de arriba la
+borra. El chat de los clientes funciona sin clave — la protección es solo para
+la gestión del local.
+
 La base se crea vacía. **En un local real no corras el seed**: son los datos de
 una rotisería de ejemplo. En vez de eso, entrá al panel y subí tu carta desde
 **Chatbot → Subir información** con un CSV.
@@ -224,7 +229,7 @@ backup **antes**, no después.
 | Síntoma | Qué mirar |
 | --- | --- |
 | No arranca | `docker compose logs comeia`. Si falta `ADMIN_TOKEN`, lo dice con todas las letras. |
-| El panel pide token y no lo acepta | El del `.env` tiene que ser idéntico; ojo con los espacios al pegarlo. |
+| El panel pide la clave y no la acepta | Tiene que ser idéntica a la del `.env`; ojo con los espacios al copiarla. |
 | El bot no usa Claude | Los logs dicen `motor de chat`. Si dice "deterministico", falta `ANTHROPIC_API_KEY`. |
 | Todos los pedidos parecen venir de la misma IP | Falta `TRUST_PROXY=1`, y el límite del chat se está aplicando al proxy. |
 | Se perdieron datos tras un deploy | El volumen no está montado en `/app/data`. Revisalo **antes** del próximo deploy. |

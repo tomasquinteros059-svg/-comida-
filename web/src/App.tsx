@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApi } from './lib/useApi';
+import { clearAdminToken, getAdminToken, onUnauthorized } from './lib/api';
+import { Acceso } from './components/Acceso';
 import { useLive } from './lib/useLive';
 import type { Dashboard } from './lib/types';
 import { DashboardPage } from './pages/Dashboard';
@@ -35,6 +37,13 @@ const routeFromHash = () => {
 
 export function App() {
   const [route, setRoute] = useState(routeFromHash);
+  // `expirado` distingue "nunca puse la clave" de "la que tenía dejó de servir":
+  // son dos situaciones distintas y merecen dos mensajes distintos.
+  const [sinAcceso, setSinAcceso] = useState<null | 'inicio' | 'expirado'>(null);
+
+  useEffect(() => {
+    onUnauthorized(() => setSinAcceso(getAdminToken() ? 'expirado' : 'inicio'));
+  }, []);
   const { data: dashboard, reload: reloadDashboard } = useApi<Dashboard>('/dashboard', 30_000);
 
   // Los contadores del menú lateral siguen los cambios en vivo.
@@ -54,6 +63,8 @@ export function App() {
   };
 
   let lastSection = '';
+
+  if (sinAcceso) return <Acceso motivo={sinAcceso} />;
 
   return (
     <div className="app">
@@ -92,6 +103,18 @@ export function App() {
               <span className="small muted nowrap">
                 {dashboard.open_orders} en curso · {dashboard.today.orders} pedidos hoy
               </span>
+            )}
+            {getAdminToken() && (
+              <button
+                className="btn ghost small"
+                title="Olvidar la clave en este dispositivo"
+                onClick={() => {
+                  clearAdminToken();
+                  window.location.reload();
+                }}
+              >
+                Salir
+              </button>
             )}
           </div>
         </header>

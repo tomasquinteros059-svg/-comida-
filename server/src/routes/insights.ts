@@ -22,13 +22,23 @@ import { config } from '../config.js';
 
 export const insightsRouter = Router();
 
+/**
+ * Ventana en dias de los reportes. Sin esto, `?days=hola` se volvia NaN, la
+ * consulta no encontraba nada y la respuesta salia igual: un informe vacio
+ * presentado como si fuera la verdad.
+ */
+const diasSchema = z.coerce.number().int().min(1).max(365).default(30);
+const dias = (valor: unknown) => diasSchema.parse(valor ?? undefined);
+
 // ── Ventas ──────────────────────────────────────────────────────────────────
+
+const fechaSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va como AAAA-MM-DD');
 
 insightsRouter.get(
   '/sales',
   route((req) => {
-    const from = typeof req.query.from === 'string' ? req.query.from : todayIso();
-    const to = typeof req.query.to === 'string' ? req.query.to : from;
+    const from = req.query.from === undefined ? todayIso() : fechaSchema.parse(req.query.from);
+    const to = req.query.to === undefined ? from : fechaSchema.parse(req.query.to);
     return salesSummary(from, to);
   }),
 );
@@ -63,20 +73,11 @@ insightsRouter.get(
   }),
 );
 
-insightsRouter.get(
-  '/menu-performance',
-  route((req) => menuPerformance(req.query.days ? Number(req.query.days) : 30)),
-);
+insightsRouter.get('/menu-performance', route((req) => menuPerformance(dias(req.query.days))));
 
-insightsRouter.get(
-  '/lagging',
-  route((req) => laggingProducts(req.query.days ? Number(req.query.days) : 30)),
-);
+insightsRouter.get('/lagging', route((req) => laggingProducts(dias(req.query.days))));
 
-insightsRouter.get(
-  '/demand-gaps',
-  route((req) => demandGaps(req.query.days ? Number(req.query.days) : 30)),
-);
+insightsRouter.get('/demand-gaps', route((req) => demandGaps(dias(req.query.days))));
 
 // ── Conocimiento del bot ────────────────────────────────────────────────────
 
