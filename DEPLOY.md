@@ -269,6 +269,56 @@ backup **antes**, no después.
 
 ---
 
+## Los canales y los cobros
+
+Los dos son **opcionales** y el sistema funciona sin ninguno.
+
+### WhatsApp
+
+Es el canal que de verdad usa la gente. El motor del chat es el mismo: toma el
+pedido igual venga del web o de WhatsApp.
+
+1. Creá una app de WhatsApp Business en `developers.facebook.com`.
+2. Completá `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TOKEN`, `WHATSAPP_APP_SECRET`
+   y una `WHATSAPP_VERIFY_TOKEN` que inventás vos.
+3. Dando de alta el webhook, apuntalo a `https://tu-dominio/api/whatsapp` y
+   pegá la misma palabra de verificación.
+
+> Las credenciales van por variables de entorno y **no** en la base: la base se
+> respalda y esas copias terminan circulando. Un token adentro de un backup que
+> anda dando vueltas deja mandar mensajes en nombre del local.
+
+### Cobros
+
+Cobrar a mano —efectivo, débito, transferencia— **funciona sin configurar
+nada**, y es la mayoría de lo que pasa en un mostrador. Está en la pantalla
+**Caja**, junto con el cierre por medio de pago.
+
+Los links de Mercado Pago son para el que pide por el chat y paga antes de
+pasar a buscarlo: completá `MERCADOPAGO_ACCESS_TOKEN`,
+`MERCADOPAGO_WEBHOOK_SECRET` y `PUBLIC_URL`, y cargá
+`https://tu-dominio/api/cobros/webhook` como URL de notificaciones.
+
+### La comandera de la cocina
+
+Si la impresora térmica está en la red del local, cargá su dirección en
+**Cocina → Comandera**. En automático la comanda sale sola al confirmarse el
+pedido. Si está apagada, el pedido se toma igual.
+
+---
+
+## Varios locales
+
+Una instalación puede atender a varios. **Cada uno tiene su propio archivo**:
+su carta, sus pedidos, su facturación y sus usuarios; no se comparte nada, ni
+las claves.
+
+Se dan de alta en **Locales** (solo el dueño) y se rutean por dominio. El local
+principal atiende todo lo que no coincida con ningún otro, **mientras no tenga
+dominios propios**: así sumar un segundo local nunca tira abajo al primero.
+
+---
+
 ## Lo que conviene saber antes de abrirlo al público
 
 Esto anda y se puede usar. Pero hay cosas que todavía no están, y es mejor

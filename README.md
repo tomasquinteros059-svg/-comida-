@@ -355,5 +355,6 @@ las comandas coherentes.
   pero si la perdió del todo se la cambia el dueño desde **Usuarios**.
 - El stream de eventos es un bus en memoria, así que asume un solo proceso. Si
   algún día hay varios, se cambia por Redis y los emisores no se tocan.
-- Impresión directa a comandera (hoy la comanda se genera y se imprime desde el
-  navegador).
+- Que el chatbot entienda audios de WhatsApp: hoy toma pedidos por texto y los
+  audios se ignoran.
+- Cobros con otros medios además de Mercado Pago.
