@@ -336,7 +336,6 @@ las comandas coherentes.
   pero si la perdió del todo se la cambia el dueño desde **Usuarios**.
 - Multi-local: el esquema lo soporta, falta el `tenant_id` y el filtrado.
 - Canal de WhatsApp: el motor ya es agnóstico del canal, falta el webhook.
-- Ingesta de `.xlsx` y `.pdf`: hoy hay que exportar a CSV primero.
 - El stream de eventos es un bus en memoria, así que asume un solo proceso. Si
   algún día hay varios, se cambia por Redis y los emisores no se tocan.
 - Cobros y medios de pago.

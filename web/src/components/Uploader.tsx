@@ -13,7 +13,9 @@ interface ImportPlan {
   rows_read: number;
   creates: ImportChange[];
   updates: ImportChange[];
-  issues: { row: number; message: string }[];
+  /** De dónde salió: un CSV, una hoja de Excel, un PDF de tantas páginas. */
+  origen?: string;
+  issues: Array<{ row: number; message: string } | string>;
 }
 
 interface ImportResult extends ImportPlan { created: number; updated: number }
@@ -24,8 +26,23 @@ const KIND_LABEL: Record<ImportKind, string> = {
   conocimiento: 'Información del local',
 };
 
-const ACCEPT = '.csv,.tsv,.txt,.md,.json,text/csv,text/plain,text/markdown';
-const MAX_BYTES = 2_000_000;
+const ACCEPT =
+  '.csv,.tsv,.txt,.md,.json,.xlsx,.xlsm,.xls,.pdf,' +
+  'text/csv,text/plain,text/markdown,application/pdf,' +
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const MAX_BYTES = 2_500_000;
+
+/** Excel y PDF son binarios: van en base64 y los lee el servidor. */
+const esBinario = (nombre: string) => /\.(xlsx|xlsm|xls|pdf)$/i.test(nombre);
+
+/** Lee un archivo binario como base64, sin el prefijo `data:`. */
+const aBase64 = (file: File) =>
+  new Promise<string>((resolver, rechazar) => {
+    const lector = new FileReader();
+    lector.onerror = () => rechazar(new Error(`No pude leer ${file.name}`));
+    lector.onload = () => resolver(String(lector.result).split(',')[1] ?? '');
+    lector.readAsDataURL(file);
+  });
 
 /**
  * Subida de archivos para alimentar al bot: la carta exportada del Excel, la
@@ -39,6 +56,7 @@ export function Uploader({ onApplied }: { onApplied: () => void }) {
   const { notify } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [content, setContent] = useState('');
+  const [binario, setBinario] = useState(false);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [kind, setKind] = useState<ImportKind | ''>('');
   const [busy, setBusy] = useState(false);
@@ -46,16 +64,19 @@ export function Uploader({ onApplied }: { onApplied: () => void }) {
 
   async function readFile(file: File, forcedKind?: ImportKind) {
     if (file.size > MAX_BYTES) {
-      notify(`${file.name} pesa más de 2 MB. Exportá solo las columnas que necesitás.`, 'error');
+      notify(`${file.name} pesa más de 2,5 MB. Exportá solo las columnas que necesitás.`, 'error');
       return;
     }
     setBusy(true);
     try {
-      const text = await file.text();
+      const esBin = esBinario(file.name);
+      const text = esBin ? await aBase64(file) : await file.text();
       setContent(text);
+      setBinario(esBin);
       const preview = await api.post<ImportPlan>('/ingest/preview', {
         content: text,
         filename: file.name,
+        ...(esBin ? { base64: true } : {}),
         ...(forcedKind ? { kind: forcedKind } : {}),
       });
       setPlan(preview);
@@ -75,6 +96,7 @@ export function Uploader({ onApplied }: { onApplied: () => void }) {
       const preview = await api.post<ImportPlan>('/ingest/preview', {
         content,
         filename: plan?.filename,
+        ...(binario ? { base64: true } : {}),
         kind: nextKind,
       });
       setPlan(preview);
@@ -93,6 +115,7 @@ export function Uploader({ onApplied }: { onApplied: () => void }) {
       const result = await api.post<ImportResult>('/ingest/apply', {
         content,
         filename: plan.filename,
+        ...(binario ? { base64: true } : {}),
         kind,
       });
       notify(`${result.created} creados y ${result.updated} actualizados desde ${result.filename}`, 'ok');
@@ -107,6 +130,7 @@ export function Uploader({ onApplied }: { onApplied: () => void }) {
 
   function reset() {
     setContent('');
+    setBinario(false);
     setPlan(null);
     setKind('');
     if (inputRef.current) inputRef.current.value = '';
@@ -144,7 +168,7 @@ export function Uploader({ onApplied }: { onApplied: () => void }) {
           <p className="strong">Arrastrá un archivo o elegilo</p>
           <p className="small muted">
             La carta exportada del Excel, la lista de insumos o un texto con horarios y
-            políticas. Acepta CSV, TSV, TXT y Markdown.
+            políticas. Acepta Excel, PDF, CSV, TSV, TXT y Markdown.
           </p>
           <button className="btn primary" onClick={() => inputRef.current?.click()} disabled={busy}>
             {busy ? <Spinner /> : 'Elegir archivo'}
@@ -186,14 +210,20 @@ export function Uploader({ onApplied }: { onApplied: () => void }) {
             </div>
           )}
 
+          {plan.origen && plan.origen !== 'texto' && (
+            <p className="small muted">Leído desde {plan.origen}.</p>
+          )}
+
           {plan.issues.length > 0 && (
-            <details>
+            <details open={plan.issues.some((i) => typeof i === 'string')}>
               <summary className="small strong" style={{ cursor: 'pointer', color: 'var(--warn)' }}>
-                {plan.issues.length} fila{plan.issues.length === 1 ? '' : 's'} que no pude leer
+                {plan.issues.length} cosa{plan.issues.length === 1 ? '' : 's'} para mirar antes de aplicar
               </summary>
               <ul className="small muted" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-                {plan.issues.slice(0, 20).map((issue) => (
-                  <li key={issue.row}>Fila {issue.row}: {issue.message}</li>
+                {plan.issues.slice(0, 20).map((issue, i) => (
+                  <li key={i}>
+                    {typeof issue === 'string' ? issue : `Fila ${issue.row}: ${issue.message}`}
+                  </li>
                 ))}
               </ul>
             </details>
