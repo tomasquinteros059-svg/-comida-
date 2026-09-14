@@ -8,6 +8,8 @@ import { closeDb, db } from './db/index.js';
 import { errorHandler } from './lib/http.js';
 import { requireAuth, requireAuthStream, requirePermiso, type Actor } from './lib/auth.js';
 import { authRouter } from './routes/auth.js';
+import { whatsappRouter, whatsappEstado } from './routes/whatsapp.js';
+import { limpiarMensajesVistos } from './domain/whatsapp.js';
 import { usuariosRouter } from './routes/usuarios.js';
 import { registrar } from './domain/users.js';
 import { describirPedido } from './lib/bitacora.js';
@@ -40,6 +42,17 @@ export function createApp() {
   // ingesta. Va montado primero porque body-parser no vuelve a leer un cuerpo
   // ya parseado, asi que el limite chico de abajo lo saltea.
   app.use('/api/ingest', express.json({ limit: '4mb' }));
+  // El webhook de WhatsApp se firma sobre el cuerpo CRUDO: volver a serializar
+  // el objeto ya parseado da otros bytes y la firma no coincidiria nunca.
+  app.use(
+    '/api/whatsapp',
+    express.json({
+      limit: '256kb',
+      verify: (req, _res, buf) => {
+        (req as express.Request & { cuerpoCrudo?: Buffer }).cuerpoCrudo = buf;
+      },
+    }),
+  );
   // Todo lo demas, incluida la ruta publica del chat: un mensaje son dos mil
   // caracteres, no cuatro megas.
   app.use(express.json({ limit: '64kb' }));
@@ -61,6 +74,10 @@ export function createApp() {
   // Entrar, salir y preguntar quien soy: publico por definicion, porque el
   // panel lo llama antes de tener sesion.
   app.use('/api/auth', authRouter);
+
+  // El webhook de WhatsApp: lo llama Meta, asi que es publico por definicion.
+  // Lo unico que lo protege es la firma del cuerpo, que se verifica adentro.
+  app.use('/api/whatsapp', whatsappRouter);
 
   // Stream de cambios del local: el panel y el chat se enteran al instante de
   // un movimiento de stock en vez de esperar al proximo refresco.
@@ -84,6 +101,9 @@ export function createApp() {
   app.use('/api/procurement', requirePermiso('compras'), procurementRouter);
   app.use('/api/ingest', requirePermiso('carta'), ingestRouter);
   app.use('/api/usuarios', requirePermiso('usuarios'), usuariosRouter);
+  // El estado del canal es del que maneja el bot; el webhook de arriba es otra
+  // cosa y ya quedo del lado publico.
+  app.get('/api/canales/whatsapp', requirePermiso('bot'), (_req, res) => res.json(whatsappEstado()));
 
   // insightsRouter junta varias pantallas bajo /api, asi que el permiso se
   // pone por camino antes de montarlo.
@@ -203,6 +223,18 @@ if (isMain) {
   barrer();
   const barrido = setInterval(barrer, 24 * 60 * 60 * 1000);
   barrido.unref();
+
+  // Los ids de mensajes de WhatsApp viejos no sirven: Meta no reintenta
+  // despues de un dia, y la tabla crece para siempre si nadie la limpia.
+  limpiarMensajesVistos();
+  const limpieza = setInterval(() => {
+    try {
+      limpiarMensajesVistos();
+    } catch (err) {
+      console.error('[whatsapp] no se pudo limpiar:', err);
+    }
+  }, 24 * 60 * 60 * 1000);
+  limpieza.unref();
 
   const server = app.listen(config.port, () => {
     console.log(`comeIA escuchando en el puerto ${config.port}`);

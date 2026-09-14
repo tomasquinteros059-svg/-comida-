@@ -310,3 +310,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id, created_at);
+
+-- ── WhatsApp ────────────────────────────────────────────────────────────────
+-- El numero del cliente, para que la misma persona siga su conversacion en vez
+-- de empezar una nueva con cada mensaje.
+ALTER TABLE conversations ADD COLUMN external_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_conversations_external ON conversations(external_id);
+
+-- Meta reintenta los webhooks cuando no contesta rapido. Sin esto, un reintento
+-- vuelve a procesar el mismo mensaje y el local cocina dos veces lo mismo.
+CREATE TABLE IF NOT EXISTS mensajes_vistos (
+  id         TEXT PRIMARY KEY,
+  canal      TEXT NOT NULL DEFAULT 'whatsapp',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_vistos_fecha ON mensajes_vistos(created_at);

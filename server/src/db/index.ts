@@ -17,10 +17,44 @@ export function db(): Database.Database {
   handle.pragma('foreign_keys = ON');
 
   const schema = fs.readFileSync(path.join(here, 'schema.sql'), 'utf8');
-  handle.exec(schema);
+  aplicarEsquema(handle, schema);
 
   instance = handle;
   return instance;
+}
+
+/**
+ * Aplica el esquema, sentencia por sentencia y en el orden del archivo.
+ *
+ * Casi todo es `CREATE ... IF NOT EXISTS` y se puede correr en cada arranque,
+ * pero SQLite no tiene `ADD COLUMN IF NOT EXISTS`: la segunda vez tira
+ * "duplicate column name". Ese error puntual se ignora, que es exactamente lo
+ * que significa "esa columna ya estaba".
+ *
+ * Va una por una y no de un saque justamente para respetar el orden: un indice
+ * sobre una columna agregada con ALTER tiene que correr despues del ALTER, y
+ * separar las sentencias por tipo rompe eso.
+ *
+ * El esquema no tiene triggers ni literales con punto y coma adentro, asi que
+ * cortar por `;` alcanza. Si algun dia los tiene, esto hay que cambiarlo.
+ */
+function aplicarEsquema(handle: Database.Database, schema: string): void {
+  const sentencias = schema
+    // Los comentarios de linea se van primero: pueden tener `;` adentro.
+    .replace(/--[^\n]*/g, '')
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const sentencia of sentencias) {
+    try {
+      handle.exec(sentencia);
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : String(err);
+      if (/duplicate column name/i.test(mensaje)) continue;
+      throw new Error(`No se pudo aplicar el esquema en:\n${sentencia.slice(0, 160)}\n${mensaje}`);
+    }
+  }
 }
 
 /** Ejecuta `fn` dentro de una transaccion. Cualquier throw revierte todo. */
