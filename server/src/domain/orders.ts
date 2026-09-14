@@ -298,7 +298,31 @@ export function createOrder(input: CreateOrderInput): Order {
   }
 
   emit('pedido', `nuevo ${code}`);
+
+  // La comanda sale sola si hay una comandera configurada en automático. Va
+  // sin await y sin poder fallar: si la impresora está apagada, el pedido ya
+  // está tomado y eso es lo que importa. El tablero lo muestra igual.
+  if (input.confirm) void imprimirAlConfirmar(id);
+
   return getOrderOrThrow(id);
+}
+
+/**
+ * Se resuelve tarde a propósito, con un import dinámico: el módulo de la
+ * comandera usa `orders` para armar la comanda, y cargarlo arriba haría un
+ * círculo entre los dos.
+ */
+async function imprimirAlConfirmar(orderId: string): Promise<void> {
+  try {
+    const { configDeComandera, imprimirComanda } = await import('./comandera.js');
+    if (!configDeComandera().automatica) return;
+    const resultado = await imprimirComanda(orderId);
+    if (!resultado.impreso && resultado.motivo) {
+      console.error(`[comandera] no se pudo imprimir ${orderId}: ${resultado.motivo}`);
+    }
+  } catch (err) {
+    console.error('[comandera] error inesperado al imprimir:', err);
+  }
 }
 
 /**

@@ -4,7 +4,7 @@ import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction } from '../lib/toast';
 import type { Order, Pagina } from '../lib/types';
-import { Badge, Card, Empty, Modal, Spinner } from '../components/ui';
+import { Badge, Card, Empty, Field, Modal, Spinner, Switch } from '../components/ui';
 import { SERVICE_LABEL, STATUS_LABEL, money, parseDate, stamp } from '../lib/format';
 import { usePermiso } from '../lib/sesionContext';
 
@@ -24,6 +24,9 @@ const elapsedMinutes = (order: Order) =>
 
 export function KitchenPage() {
   const { data, loading, error, reload } = useApi<Order[]>('/orders/kitchen', 8_000);
+  // Si no hay comandera configurada, el botón de imprimir no aparece: un botón
+  // que siempre falla es peor que no tenerlo.
+  const comandera = useApi<{ host: string; automatica: boolean }>('/orders/comandera/config');
   const run = useAction();
   useLive(['pedido'], () => void reload());
   const [ticket, setTicket] = useState<{ code: string; text: string } | null>(null);
@@ -40,6 +43,14 @@ export function KitchenPage() {
       await api.post(`/orders/${order.id}/status`, { status, actor: 'cocina' });
       await reload();
     });
+
+  /** Manda la comanda a la impresora térmica de la cocina. */
+  const imprimir = (order: Order) =>
+    void run(async () => {
+      const r = await api.post<{ impreso: boolean; motivo?: string }>(`/orders/${order.id}/imprimir`);
+      if (!r.impreso) throw new Error(r.motivo ?? 'No se pudo imprimir');
+      return r;
+    }, `Comanda #${String(order.daily_number).padStart(3, '0')} impresa`);
 
   const openTicket = (order: Order) =>
     void run(async () => {
@@ -112,6 +123,15 @@ export function KitchenPage() {
                           {next.label}
                         </button>
                       )}
+                      {comandera.data?.host ? (
+                        <button
+                          className="btn small"
+                          onClick={() => imprimir(order)}
+                          title={`Imprimir en ${comandera.data.host}`}
+                        >
+                          Imprimir
+                        </button>
+                      ) : null}
                       <button className="btn small" onClick={() => openTicket(order)}>
                         Comanda
                       </button>
@@ -133,6 +153,7 @@ export function KitchenPage() {
       })}
 
       <RecentOrders />
+      <ConfigComandera />
 
       {ticket && (
         <Modal
@@ -148,6 +169,90 @@ export function KitchenPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/**
+ * Dónde está la comandera de la cocina. Es una impresora térmica de red: tiene
+ * una IP fija en el router del local y escucha en el 9100, que es el puerto que
+ * usan todas.
+ */
+function ConfigComandera() {
+  const { data, reload } = useApi<{ host: string; puerto: number; automatica: boolean; copias: number }>(
+    '/orders/comandera/config',
+  );
+  const run = useAction();
+  const [host, setHost] = useState<string | null>(null);
+
+  if (!data) return null;
+  const valor = host ?? data.host;
+
+  const guardar = (cambio: Record<string, unknown>) =>
+    void run(async () => {
+      await api.put('/orders/comandera/config', cambio);
+      setHost(null);
+      await reload();
+    }, 'Guardado');
+
+  return (
+    <Card title="Comandera de la cocina">
+      <p className="small muted" style={{ marginBottom: 14, maxWidth: '42rem' }}>
+        La dirección de la impresora térmica en la red del local. En automático,
+        la comanda sale sola apenas se confirma un pedido, sin que nadie tenga
+        que estar mirando la pantalla.
+      </p>
+
+      <div className="filtros" style={{ marginBottom: 12 }}>
+        <Field label="Dirección" hint="La IP fija que le diste en el router.">
+          <input
+            id="comandera-host"
+            className="input"
+            value={valor}
+            placeholder="192.168.1.87"
+            onChange={(e) => setHost(e.target.value)}
+          />
+        </Field>
+        <Field label="Puerto" hint="9100 en casi todas.">
+          <input
+            id="comandera-puerto"
+            className="input"
+            type="number"
+            defaultValue={data.puerto}
+            onBlur={(e) => guardar({ puerto: Number(e.target.value) })}
+          />
+        </Field>
+        <Field label="Copias" hint="Una para la plancha, otra para el pase.">
+          <input
+            id="comandera-copias"
+            className="input"
+            type="number"
+            min={1}
+            max={5}
+            defaultValue={data.copias}
+            onBlur={(e) => guardar({ copias: Number(e.target.value) })}
+          />
+        </Field>
+        <button className="btn primary small" disabled={host === null} onClick={() => guardar({ host: valor })}>
+          Guardar
+        </button>
+      </div>
+
+      <div className="row tight" style={{ alignItems: 'center', gap: 10 }}>
+        <Switch
+          on={data.automatica}
+          onChange={(next) => guardar({ automatica: next })}
+          label="Imprimir sola al confirmar un pedido"
+        />
+        <span className="small">Imprimir sola al confirmar un pedido</span>
+      </div>
+
+      {!data.host && (
+        <p className="small muted" style={{ marginTop: 12 }}>
+          Sin dirección cargada no aparece el botón de imprimir: un botón que
+          siempre falla es peor que no tenerlo.
+        </p>
+      )}
+    </Card>
   );
 }
 

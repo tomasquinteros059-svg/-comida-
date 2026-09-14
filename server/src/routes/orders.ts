@@ -3,6 +3,12 @@ import { z } from 'zod';
 import { route } from '../lib/http.js';
 import { leerPagina } from '../lib/paginacion.js';
 import {
+  comandaEnBytes,
+  configDeComandera,
+  fijarComandera,
+  imprimirComanda,
+} from '../domain/comandera.js';
+import {
   advanceOrder,
   createOrder,
   getOrderOrThrow,
@@ -97,5 +103,55 @@ ordersRouter.post(
       .object({ status: statusSchema, actor: z.string().optional(), note: z.string().optional() })
       .parse(req.body);
     return advanceOrder(req.params.id!, status, { actor, note });
+  }),
+);
+
+// ── Comandera ───────────────────────────────────────────────────────────────
+
+/**
+ * La comanda impresa directo en la cocina. Hasta ahora alguien tenía que estar
+ * mirando la pantalla y apretar; en una cocina con las manos ocupadas eso no
+ * pasa y el pedido se pierde.
+ */
+ordersRouter.get('/comandera/config', route(() => configDeComandera()));
+
+const configComanderaBody = z.object({
+  host: z.string().max(200).optional(),
+  puerto: z.coerce.number().int().min(1).max(65535).optional(),
+  automatica: z.boolean().optional(),
+  copias: z.coerce.number().int().min(1).max(5).optional(),
+});
+
+ordersRouter.put(
+  '/comandera/config',
+  route((req) => fijarComandera(configComanderaBody.parse(req.body ?? {}))),
+);
+
+/** Imprime un pedido a mano, para cuando la automática está apagada o falló. */
+ordersRouter.post(
+  '/:id/imprimir',
+  route(async (req) => {
+    const { copias, abrir_cajon } = z
+      .object({ copias: z.coerce.number().int().min(1).max(5).optional(), abrir_cajon: z.boolean().optional() })
+      .parse(req.body ?? {});
+    return imprimirComanda(req.params.id!, { copias, abrirCajon: abrir_cajon });
+  }),
+);
+
+/**
+ * Los bytes tal como salen a la impresora. Sirve para ver qué se manda cuando
+ * una comandera imprime cualquier cosa, que es el problema más común y el más
+ * difícil de diagnosticar a ciegas.
+ */
+ordersRouter.get(
+  '/:id/comanda-bytes',
+  route((req, res) => {
+    const bytes = comandaEnBytes(req.params.id!);
+    res.type('text/plain').send(
+      bytes
+        .toString('latin1')
+        .replace(/\x1b/g, '<ESC>')
+        .replace(/\x1d/g, '<GS>'),
+    );
   }),
 );
