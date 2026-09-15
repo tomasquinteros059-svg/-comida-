@@ -1,0 +1,8 @@
+{
+  "appId": "ar.comeia.demo",
+  "appName": "comeIA",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  }
+}

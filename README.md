@@ -332,6 +332,38 @@ clave a alguien, o darlo de baja, le cierra las sesiones abiertas en el acto.
 
 ---
 
+## Verlo en el teléfono
+
+Hay dos maneras, y la primera es la que sirve para trabajar:
+
+**El panel, desde el navegador.** comeIA se usa desde el navegador del
+teléfono: se entra a la dirección del servidor y listo. Con *Agregar a la
+pantalla de inicio* (Compartir → en iPhone, el menú de tres puntos en Android)
+queda un icono igual al de cualquier aplicación, a pantalla completa y sin la
+barra del navegador. No hay nada que instalar ni que actualizar: el local abre
+el panel y es el del día.
+
+**La demo, armada como APK.** Sirve para mostrarlo sin tener ningún servidor
+levantado: lleva los datos de mentira adentro y abre sin internet.
+
+```bash
+npm install && npm run build:demo        # compila la demo
+cd movil && npm install && node preparar.mjs
+cd android && ./gradlew assembleDebug    # necesita el SDK de Android
+```
+
+El archivo queda en `movil/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+El SDK de Android son varios gigas, así que también está el atajo: en GitHub,
+**Actions → Armar el APK → Run workflow**. Lo compila allá y el archivo queda
+para bajar en *Artifacts*, sin instalar nada.
+
+El proyecto de Android no se guarda en el repositorio —lo genera Capacitor
+solo, y hay que regenerarlo igual con cada versión—; `preparar.mjs` lo arma, le
+copia la demo y le pone el icono.
+
+---
+
 ## Demo
 
 `server/scripts/export-demo.ts` vuelca la carta, los insumos, los proveedores y

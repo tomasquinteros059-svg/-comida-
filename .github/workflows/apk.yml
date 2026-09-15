@@ -1,0 +1,54 @@
+# Arma el APK de la demo y lo deja para bajar.
+#
+# Acá y no en una computadora porque el SDK de Android son varios gigas que no
+# le vamos a pedir a nadie que instale para ver cómo se ve la app. Los
+# servidores de GitHub ya lo tienen puesto.
+#
+# Se corre a mano: Actions → "Armar el APK" → "Run workflow". Cuando termina,
+# el archivo queda abajo de todo, en "Artifacts".
+#
+# El APK lleva la demo adentro: abre sin servidor y sin internet, con datos de
+# mentira. Para atender el local de verdad se entra al servidor desde el
+# navegador del teléfono, sin instalar nada.
+name: Armar el APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compilar la demo
+        run: |
+          npm install
+          npm run build:demo
+
+      - name: Preparar el proyecto de Android
+        working-directory: movil
+        run: |
+          npm install
+          node preparar.mjs
+
+      - name: Armar el APK
+        working-directory: movil/android
+        run: ./gradlew assembleDebug
+
+      # Firmado de debug: alcanza para instalarlo a mano en un teléfono. Para
+      # publicarlo en Play hace falta una clave propia, que no va en el repo.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: comeIA-demo-apk
+          path: movil/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
