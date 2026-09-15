@@ -283,6 +283,19 @@ pedido igual venga del web o de WhatsApp.
    y una `WHATSAPP_VERIFY_TOKEN` que inventás vos.
 3. Dando de alta el webhook, apuntalo a `https://tu-dominio/api/whatsapp` y
    pegá la misma palabra de verificación.
+4. Entrá a **Bot → WhatsApp del local** y tocá **Probar conexión**.
+
+Ese botón existe porque las cuatro credenciales se parecen entre sí y, cuando
+una está mal, el error de Meta no dice cuál. Prueba cada cosa por separado
+—que estén las cuatro, que el token sea de ese número, que la clave de la app
+firme— y contesta en castellano qué arreglar. Los dos errores de siempre: el
+token temporal de Meta dura 24 horas (para producción hace falta uno de
+System User), y `WHATSAPP_PHONE_NUMBER_ID` es el identificador del número, no
+el teléfono.
+
+El webhook es la parte que no depende de las credenciales: Meta tiene que
+poder llegar al servidor desde afuera, por HTTPS y con certificado válido. Sin
+eso el local manda mensajes pero no recibe ninguno.
 
 > Las credenciales van por variables de entorno y **no** en la base: la base se
 > respalda y esas copias terminan circulando. Un token adentro de un backup que

@@ -8,7 +8,7 @@ import { closeDb, db } from './db/index.js';
 import { errorHandler } from './lib/http.js';
 import { requireAuth, requireAuthStream, requirePermiso, type Actor } from './lib/auth.js';
 import { authRouter } from './routes/auth.js';
-import { whatsappRouter, whatsappEstado } from './routes/whatsapp.js';
+import { whatsappRouter, whatsappEstado, probarConexion } from './routes/whatsapp.js';
 import { cobrosRouter, cobrosWebhookRouter } from './routes/cobros.js';
 import { localesRouter } from './routes/locales.js';
 import { resolverLocal } from './lib/local.js';
@@ -121,6 +121,11 @@ export function createApp() {
   // El estado del canal es del que maneja el bot; el webhook de arriba es otra
   // cosa y ya quedo del lado publico.
   app.get('/api/canales/whatsapp', requirePermiso('bot'), (_req, res) => res.json(whatsappEstado()));
+  // Probar la conexion con Meta: conectar WhatsApp es media hora de ir y venir
+  // entre cuatro credenciales parecidas, y el error de Meta no dice cual falla.
+  app.post('/api/canales/whatsapp/probar', requirePermiso('bot'), (_req, res, next) => {
+    probarConexion().then((r) => res.json(r)).catch(next);
+  });
 
   // insightsRouter junta varias pantallas bajo /api, asi que el permiso se
   // pone por camino antes de montarlo.

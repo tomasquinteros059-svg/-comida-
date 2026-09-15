@@ -11,6 +11,7 @@ import {
   mensajesDelWebhook,
   responderVerificacion,
   whatsappActivo,
+  probarWhatsapp,
 } from '../domain/whatsapp.js';
 import { route } from '../lib/http.js';
 
@@ -97,5 +98,8 @@ export const whatsappEstado = () => {
     version: c.version,
   };
 };
+
+/** Revisa la conexion con Meta y dice que falta, paso por paso. */
+export const probarConexion = () => probarWhatsapp();
 
 export { limpiarMensajesVistos };

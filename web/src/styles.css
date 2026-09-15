@@ -523,6 +523,7 @@ tbody tr:hover { background: var(--surface-2); }
 .banner.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
 .banner.danger { background: var(--danger-soft); border-color: transparent; color: var(--danger); }
 .banner.info { background: var(--info-soft); border-color: transparent; color: var(--info); }
+.banner.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
 
 .modal-backdrop {
   position: fixed;

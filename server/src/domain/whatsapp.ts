@@ -258,3 +258,116 @@ export function numeroDeConversacion(conversationId: string): string | null {
 }
 
 export const habilitadoEnProduccion = (): boolean => whatsappActivo() && config.env !== 'test';
+
+// ── Probar la conexión ──────────────────────────────────────────────────────
+
+export interface Diagnostico {
+  paso: string;
+  ok: boolean;
+  detalle: string;
+  /** Qué hacer si falló. En castellano, no el error de Meta. */
+  arreglo?: string;
+}
+
+/**
+ * Revisa la conexión con Meta y dice qué falta, paso por paso.
+ *
+ * Conectar WhatsApp es media hora de ir y venir entre cuatro credenciales
+ * parecidas, y cuando algo no anda el error de Meta no dice cuál de las cuatro
+ * es. Esto lo contesta de una: prueba cada cosa por separado contra su API y
+ * dice qué arreglar.
+ */
+export async function probarWhatsapp(): Promise<{ listo: boolean; pasos: Diagnostico[] }> {
+  const c = configWhatsapp();
+  const pasos: Diagnostico[] = [];
+
+  // 1. Que estén las cuatro.
+  const falta = loQueFaltaDeWhatsapp();
+  pasos.push({
+    paso: 'Las credenciales están cargadas',
+    ok: falta.length === 0,
+    detalle: falta.length ? `Falta ${falta.join(', ')}` : 'Las cuatro están',
+    arreglo: falta.length ? 'Cargalas en el .env del servidor y reiniciá con: docker compose up -d' : undefined,
+  });
+  if (falta.length) return { listo: false, pasos };
+
+  // 2. Que el token sirva y sea de ESE número.
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${c.version}/${c.phoneNumberId}?fields=display_phone_number,verified_name`,
+      { headers: { authorization: `Bearer ${c.token}` } },
+    );
+    const cuerpo = (await res.json().catch(() => ({}))) as {
+      display_phone_number?: string;
+      verified_name?: string;
+      error?: { message?: string; code?: number };
+    };
+
+    if (res.ok) {
+      pasos.push({
+        paso: 'Meta reconoce el número',
+        ok: true,
+        detalle: `${cuerpo.verified_name ?? 'sin nombre'} · ${cuerpo.display_phone_number ?? c.phoneNumberId}`,
+      });
+    } else if (res.status === 401 || cuerpo.error?.code === 190) {
+      pasos.push({
+        paso: 'Meta reconoce el número',
+        ok: false,
+        detalle: 'El token no sirve o venció',
+        arreglo:
+          'Generá un token nuevo en developers.facebook.com. Los temporales duran 24 h: ' +
+          'para producción hace falta uno permanente (System User).',
+      });
+    } else if (res.status === 404) {
+      pasos.push({
+        paso: 'Meta reconoce el número',
+        ok: false,
+        detalle: `No existe el número ${c.phoneNumberId}`,
+        arreglo:
+          'WHATSAPP_PHONE_NUMBER_ID es el identificador del número, no el número. ' +
+          'Está en la pantalla de la API de WhatsApp, abajo del teléfono.',
+      });
+    } else {
+      pasos.push({
+        paso: 'Meta reconoce el número',
+        ok: false,
+        detalle: cuerpo.error?.message ?? `Meta contestó ${res.status}`,
+      });
+    }
+  } catch (err) {
+    pasos.push({
+      paso: 'Meta reconoce el número',
+      ok: false,
+      detalle: err instanceof Error ? err.message : 'No se pudo llegar a Meta',
+      arreglo: 'El servidor tiene que poder salir a graph.facebook.com.',
+    });
+  }
+
+  // 3. Que la clave de la app firme como Meta espera.
+  //    Se verifica una firma armada acá: si el cálculo no coincide consigo
+  //    mismo, la clave está mal copiada (un espacio, un salto de línea).
+  const prueba = JSON.stringify({ prueba: true });
+  const firmaPropia = `sha256=${createHmac('sha256', c.appSecret).update(prueba).digest('hex')}`;
+  pasos.push({
+    paso: 'La clave de la app firma bien',
+    ok: firmaValida(prueba, firmaPropia),
+    detalle: firmaValida(prueba, firmaPropia)
+      ? 'La firma del webhook se va a poder verificar'
+      : 'La clave no sirve para firmar',
+    arreglo: firmaValida(prueba, firmaPropia)
+      ? undefined
+      : 'Copiá de nuevo el App Secret, sin espacios ni saltos de línea.',
+  });
+
+  // 4. El webhook: esto no se puede probar desde acá, lo prueba Meta.
+  pasos.push({
+    paso: 'El webhook está dado de alta',
+    ok: true,
+    detalle: 'Esto lo comprueba Meta cuando le das "Verificar y guardar"',
+    arreglo:
+      'En la app de Meta, Webhooks → WhatsApp, poné la URL de este servidor terminada ' +
+      'en /api/whatsapp, pegá la misma palabra de WHATSAPP_VERIFY_TOKEN y suscribite a "messages".',
+  });
+
+  return { listo: pasos.every((p) => p.ok), pasos };
+}

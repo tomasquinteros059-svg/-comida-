@@ -629,6 +629,29 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
     case 'GET /retencion':
       return { dias: 90, total: 0, con_pedido: 0, mensajes: estado.mensajes.length, la_mas_vieja: null, a_borrar: 0 };
 
+    // ── Canales ──
+    // En la demo no hay servidor al que Meta le pueda pegar, asi que la
+    // tarjeta de WhatsApp muestra lo que muestra un local recien instalado.
+    case 'GET /canales/whatsapp':
+      return {
+        activo: false,
+        falta: ['la configuración de Meta (esto es una demo, no hay servidor)'],
+        numero_id: '',
+        version: 'v21.0',
+      };
+    case 'POST /canales/whatsapp/probar':
+      return {
+        listo: false,
+        pasos: [
+          {
+            paso: 'Las credenciales están cargadas',
+            ok: false,
+            detalle: 'Esto es la demo: corre entera adentro del navegador',
+            arreglo: 'WhatsApp necesita el servidor instalado y las credenciales de Meta.',
+          },
+        ],
+      };
+
     // ── Caja ──
     case 'GET /cobros/estado':
       return {

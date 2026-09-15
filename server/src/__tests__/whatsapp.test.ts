@@ -20,6 +20,8 @@ let base: string;
 let server: ReturnType<ReturnType<typeof createApp>['listen']>;
 /** Lo que se le habría mandado a Meta, sin salir a internet. */
 let enviados: Array<{ a: string; texto: string }> = [];
+/** Lo que contesta Meta cuando se le pregunta por el número (probarWhatsapp). */
+let respuestaDeMeta: (() => Response) | null = null;
 
 before(async () => {
   const categoria = createCategory({ name: 'Empanadas' }).id;
@@ -31,6 +33,11 @@ before(async () => {
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const destino = String(url);
     if (destino.includes('graph.facebook.com')) {
+      // La consulta del diagnóstico no manda cuerpo: pregunta por el número.
+      if (!init?.body) {
+        if (respuestaDeMeta) return respuestaDeMeta();
+        throw new Error('fetch a Meta sin respuesta preparada: ' + destino);
+      }
       const cuerpo = JSON.parse(String(init?.body ?? '{}'));
       enviados.push({ a: cuerpo.to, texto: cuerpo.text?.body ?? '' });
       return new Response(JSON.stringify({ messages: [{ id: 'wamid.enviado' }] }), { status: 200 });
@@ -50,6 +57,7 @@ after(async () => {
 
 beforeEach(() => {
   enviados = [];
+  respuestaDeMeta = null;
 });
 
 const firmar = (cuerpo: string) => `sha256=${createHmac('sha256', SECRETO).update(cuerpo).digest('hex')}`;
@@ -280,5 +288,86 @@ describe('la configuración', () => {
     assert.equal(wa.whatsappActivo(), false);
     assert.match(wa.loQueFaltaDeWhatsapp().join(' '), /token/i);
     process.env.WHATSAPP_TOKEN = guardado;
+  });
+});
+
+describe('probar la conexión', () => {
+  const respondeMeta = (estado: number, cuerpo: unknown) => {
+    respuestaDeMeta = () => new Response(JSON.stringify(cuerpo), { status: estado });
+  };
+
+  it('con todo bien, los cuatro pasos dan verde', async () => {
+    respondeMeta(200, { display_phone_number: '+54 9 11 5555-5555', verified_name: 'La Rotisería' });
+    const { listo, pasos } = await wa.probarWhatsapp();
+    assert.equal(listo, true, JSON.stringify(pasos, null, 2));
+    assert.equal(pasos.length, 4);
+    assert.ok(
+      pasos.some((p) => p.detalle.includes('La Rotisería')),
+      'tiene que mostrar el nombre del local que Meta devuelve, para saber que es el número correcto',
+    );
+  });
+
+  it('si falta una credencial ni sale a internet', async () => {
+    const guardado = process.env.WHATSAPP_APP_SECRET;
+    delete process.env.WHATSAPP_APP_SECRET;
+    // respuestaDeMeta sigue en null: si saliera, el fetch falseado tira error.
+    const { listo, pasos } = await wa.probarWhatsapp();
+    process.env.WHATSAPP_APP_SECRET = guardado;
+
+    assert.equal(listo, false);
+    assert.equal(pasos.length, 1, 'no tiene sentido preguntarle a Meta sin las credenciales');
+    assert.match(pasos[0]!.detalle, /clave secreta/i);
+    assert.match(pasos[0]!.arreglo ?? '', /\.env/);
+  });
+
+  it('un token vencido se explica como token vencido, no como error 401', async () => {
+    respondeMeta(401, { error: { message: 'Error validating access token', code: 190 } });
+    const { listo, pasos } = await wa.probarWhatsapp();
+
+    assert.equal(listo, false);
+    const paso = pasos.find((p) => p.paso.includes('número'))!;
+    assert.equal(paso.ok, false);
+    assert.match(paso.detalle, /token/i);
+    assert.match(paso.arreglo ?? '', /24 h/, 'el token temporal que dura un día es la causa habitual');
+  });
+
+  it('el número equivocado avisa que es el identificador, no el teléfono', async () => {
+    respondeMeta(404, { error: { message: 'Unsupported get request' } });
+    const { pasos } = await wa.probarWhatsapp();
+
+    const paso = pasos.find((p) => p.paso.includes('número'))!;
+    assert.equal(paso.ok, false);
+    assert.match(paso.arreglo ?? '', /identificador del número, no el número/);
+  });
+
+  it('otro error de Meta se muestra tal cual lo dijo Meta', async () => {
+    respondeMeta(403, { error: { message: 'Application does not have permission for this action' } });
+    const { pasos } = await wa.probarWhatsapp();
+
+    const paso = pasos.find((p) => p.paso.includes('número'))!;
+    assert.equal(paso.ok, false);
+    assert.match(paso.detalle, /does not have permission/);
+  });
+
+  it('si no se llega a Meta lo dice sin romperse', async () => {
+    respuestaDeMeta = () => {
+      throw new Error('getaddrinfo ENOTFOUND graph.facebook.com');
+    };
+    const { listo, pasos } = await wa.probarWhatsapp();
+
+    assert.equal(listo, false);
+    assert.equal(pasos.length, 4, 'sigue revisando el resto aunque no haya internet');
+    const paso = pasos.find((p) => p.paso.includes('número'))!;
+    assert.match(paso.arreglo ?? '', /graph\.facebook\.com/);
+  });
+
+  it('el panel lo pide por HTTP y recibe los pasos', async () => {
+    respondeMeta(200, { display_phone_number: '+54 9 11 5555-5555', verified_name: 'La Rotisería' });
+    const res = await fetch(`${base}/api/canales/whatsapp/probar`, { method: 'POST' });
+    assert.equal(res.status, 200);
+
+    const cuerpo = (await res.json()) as { listo: boolean; pasos: Array<{ paso: string }> };
+    assert.equal(cuerpo.listo, true);
+    assert.equal(cuerpo.pasos.length, 4);
   });
 });

@@ -1,0 +1,12 @@
+{
+  "name": "comeIA · demo del local",
+  "short_name": "comeIA",
+  "description": "El panel de comeIA con datos de mentira, para probarlo sin instalar nada.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fff7ed",
+  "theme_color": "#c2410c",
+  "icons": [
+    { "src": "icono.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

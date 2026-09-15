@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi } from '../lib/useApi';
 import { api } from '../lib/api';
-import { useAction } from '../lib/toast';
+import { useAction, useToast } from '../lib/toast';
 import type { DemandGap, KnowledgeEntry, Pagina } from '../lib/types';
 import { Badge, Card, Empty, Field, Modal, Spinner, Switch } from '../components/ui';
 import { timeAgo } from '../lib/format';
@@ -109,6 +109,114 @@ function Retencion() {
   );
 }
 
+interface EstadoWhatsapp {
+  activo: boolean;
+  falta: string[];
+  numero_id: string;
+  version: string;
+}
+
+interface Diagnostico {
+  paso: string;
+  ok: boolean;
+  detalle: string;
+  arreglo?: string;
+}
+
+/**
+ * Conectar el WhatsApp del local.
+ *
+ * Son cuatro credenciales de Meta que se parecen entre sí, y cuando una está
+ * mal el error que devuelve Meta no dice cuál. Esta tarjeta prueba cada una
+ * por separado y dice qué hacer, para no perder la tarde probando de a una.
+ *
+ * Las credenciales no se cargan desde acá a propósito: van en el .env del
+ * servidor. La base se copia todas las noches, y esas copias andan dando
+ * vueltas; el token de WhatsApp no tiene por qué viajar en ellas.
+ */
+function Whatsapp() {
+  const { data } = useApi<EstadoWhatsapp>('/canales/whatsapp');
+  const run = useAction();
+  const { notify } = useToast();
+  const [pasos, setPasos] = useState<Diagnostico[] | null>(null);
+  const [probando, setProbando] = useState(false);
+
+  const probar = () =>
+    void run(async () => {
+      setProbando(true);
+      try {
+        const r = await api.post<{ listo: boolean; pasos: Diagnostico[] }>('/canales/whatsapp/probar');
+        setPasos(r.pasos);
+        notify(
+          r.listo ? 'WhatsApp está conectado' : 'Falta algo: mirá los pasos de abajo',
+          r.listo ? 'ok' : 'info',
+        );
+      } finally {
+        setProbando(false);
+      }
+    });
+
+  if (!data) return null;
+
+  const direccion = `${window.location.origin}/api/whatsapp`;
+
+  return (
+    <Card
+      title="WhatsApp del local"
+      action={
+        <button className="btn primary small" onClick={probar} disabled={probando}>
+          {probando ? 'Probando…' : 'Probar conexión'}
+        </button>
+      }
+    >
+      {data.activo ? (
+        <p className="small muted" style={{ marginBottom: 12 }}>
+          Las cuatro credenciales están cargadas (número …{data.numero_id.replace(/\D/g, '')}, API{' '}
+          {data.version}). Tocá <strong>Probar conexión</strong> para ver si Meta las acepta.
+        </p>
+      ) : (
+        // Una vez que probó, los pasos dicen lo mismo con más detalle: sobra.
+        !pasos && (
+        <div className="banner warn" style={{ flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          <span>
+            <strong>WhatsApp no está conectado.</strong> Falta {data.falta.join(', ')}.
+          </span>
+          <span className="small">
+            Se cargan en el archivo <code>.env</code> del servidor y después{' '}
+            <code>docker compose up -d</code>. En el panel no se cargan a propósito: la base se
+            copia todas las noches y el token no tiene por qué viajar en las copias.
+          </span>
+        </div>
+        )
+      )}
+
+      {pasos && (
+        <div className="stack tight" style={{ marginBottom: 12 }}>
+          {pasos.map((p) => (
+            <div
+              key={p.paso}
+              className={`banner ${p.ok ? 'ok' : 'warn'}`}
+              style={{ flexDirection: 'column', gap: 4 }}
+            >
+              <span>
+                {p.ok ? '✓' : '✗'} <strong>{p.paso}</strong> · {p.detalle}
+              </span>
+              {p.arreglo && <span className="small">{p.arreglo}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Field
+        label="La dirección que va en Meta"
+        hint="Webhooks → WhatsApp → Editar. Tiene que ser https y llegar desde afuera."
+      >
+        <input className="input" readOnly value={direccion} onFocus={(e) => e.target.select()} />
+      </Field>
+    </Card>
+  );
+}
+
 interface FlaggedMessage {
   id: string;
   content: string;
@@ -148,6 +256,8 @@ export function BotPage() {
         Lo que cargues acá entra en el prompt del bot en el turno siguiente. La carta y los precios
         no hace falta escribirlos: el bot los lee directo de la base.
       </div>
+
+      <Whatsapp />
 
       <Card
         title="Lo que el bot sabe del local"
