@@ -41,9 +41,18 @@ jobs:
           npm install
           node preparar.mjs
 
+      # Sin esto el primer build se queda esperando una respuesta que nadie va
+      # a escribir: Gradle pregunta por las licencias del SDK y se cuelga hasta
+      # que el trabajo se cae solo, horas despues.
+      - name: Aceptar las licencias del SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
       - name: Armar el APK
         working-directory: movil/android
-        run: ./gradlew assembleDebug
+        # Con limite: si algo se vuelve a colgar, que falle en 25 minutos y lo
+        # diga, en vez de comerse las horas de la cuenta en silencio.
+        timeout-minutes: 25
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       # Firmado de debug: alcanza para instalarlo a mano en un teléfono. Para
       # publicarlo en Play hace falta una clave propia, que no va en el repo.
