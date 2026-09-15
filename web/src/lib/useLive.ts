@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { getAdminToken } from './api';
+import { ES_DEMO, getAdminToken } from './api';
 
 export type LiveEventType = 'pedido' | 'stock' | 'carta' | 'compras' | 'conocimiento';
 
@@ -22,6 +22,9 @@ export function useLive(types: LiveEventType[], onEvent: (event: LiveEvent) => v
   const key = types.join(',');
 
   useEffect(() => {
+    // En la demo no hay servidor con que abrir el stream: el panel se refresca
+    // igual por polling, apenas mas lento.
+    if (ES_DEMO) return;
     const token = getAdminToken();
     const source = new EventSource(`/api/events${token ? `?token=${encodeURIComponent(token)}` : ''}`);
 

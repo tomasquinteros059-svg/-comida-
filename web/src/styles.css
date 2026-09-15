@@ -675,3 +675,16 @@ tbody tr:hover { background: var(--surface-2); }
   align-items: flex-end;
 }
 .filtros .field { flex: 1 1 140px; min-width: 0; margin: 0; }
+
+/* ── Cinta de la demo ─────────────────────────────────────────────────────
+   Tiene que estar siempre a la vista: nadie puede confundir la demo con el
+   local de verdad y creer que tomó un pedido que nadie va a cocinar. */
+.cinta-demo {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  padding: 7px 16px;
+  text-align: center;
+}
+.cinta-demo strong { font-weight: 700; }

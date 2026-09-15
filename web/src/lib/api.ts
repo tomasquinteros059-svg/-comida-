@@ -1,5 +1,16 @@
 /** Cliente HTTP unico. Centraliza el token del panel y el formato de error. */
 
+/**
+ * Modo demo: en vez de hablar con un servidor, las llamadas las contesta un
+ * comeIA entero corriendo adentro del navegador (ver src/demo/servidor.ts).
+ *
+ * Se prende al compilar con VITE_DEMO=1. Sirve para ver como funciona desde el
+ * telefono sin tener nada montado: el circuito es el de verdad —el chat toma
+ * el pedido, la comanda cae en la cocina, el stock baja por receta y la alerta
+ * aparece sola— solo que los datos son de una rotiseria de ejemplo.
+ */
+export const ES_DEMO = import.meta.env.VITE_DEMO === '1';
+
 const ADMIN_TOKEN_KEY = 'comeia.adminToken';
 
 export const getAdminToken = () => localStorage.getItem(ADMIN_TOKEN_KEY) ?? '';
@@ -23,6 +34,16 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (ES_DEMO) {
+    const { responderDemo } = await import('../demo/servidor');
+    try {
+      return (await responderDemo(method, path, body)) as T;
+    } catch (err) {
+      const status = (err as { status?: number }).status ?? 400;
+      throw new ApiError(status, err instanceof Error ? err.message : 'Error en la demo');
+    }
+  }
+
   const token = getAdminToken();
   const response = await fetch(`/api${path}`, {
     method,

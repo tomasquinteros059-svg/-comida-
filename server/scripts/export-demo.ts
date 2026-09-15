@@ -67,7 +67,8 @@ function buildService() {
   )[0]?.day;
   if (!lastDay) return { orders: [] };
 
-  const orders = listOrders({ since: `${lastDay} 00:00:00`, limit: 200 }).filter(
+  // listOrders devuelve una pagina desde que los listados se paginaron.
+  const orders = listOrders({ since: `${lastDay} 00:00:00` }, { limite: 200, desde: 0 }).items.filter(
     (o) => o.created_at.startsWith(lastDay),
   );
   const last = Math.max(...orders.map((o) => parseSqliteDate(o.created_at).getTime()));

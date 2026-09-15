@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApi } from './lib/useApi';
-import { api, clearAdminToken, onUnauthorized } from './lib/api';
+import { api, clearAdminToken, ES_DEMO, onUnauthorized } from './lib/api';
 import { Acceso } from './components/Acceso';
 import { CambiarClave } from './components/CambiarClave';
 import { Spinner } from './components/ui';
@@ -164,6 +164,12 @@ function Panel({ sesion }: { sesion: Sesion }) {
       </nav>
 
       <main className="main">
+        {ES_DEMO && (
+          <div className="cinta-demo">
+            <strong>Demo</strong> · rotisería de ejemplo, todo corre en tu teléfono.
+            Los pedidos que tomes son de mentira y se borran al recargar.
+          </div>
+        )}
         <header className="topbar">
           <h1>{current.label}</h1>
           <div className="topbar-actions">
