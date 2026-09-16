@@ -29,6 +29,33 @@ services:
       # es confiable. En 0 el limite de pedidos contaria la IP del proxy.
       TRUST_PROXY: ${TRUST_PROXY:-1}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # Cuanto "piensa" el bot antes de contestar, y los limites de pedidos.
+      #
+      # Con valores por omision explicitos y no vacios: `${X:-}` mete una
+      # CADENA VACIA en el contenedor, que no es lo mismo que no definirla.
+      CHAT_EFFORT: ${CHAT_EFFORT:-low}
+      CHAT_RATE_MAX: ${CHAT_RATE_MAX:-20}
+      CHAT_RATE_WINDOW_MS: ${CHAT_RATE_WINDOW_MS:-60000}
+      LOGIN_RATE_MAX: ${LOGIN_RATE_MAX:-5}
+      # La direccion publica del servidor. Mercado Pago la necesita para armar
+      # la vuelta del pago.
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # ── WhatsApp ────────────────────────────────────────────────────────────
+      # Van por variable de entorno y no en la base a proposito: la base se
+      # respalda y esas copias terminan circulando.
+      #
+      # Tienen que estar listadas ACA: el .env solo alcanza para completar
+      # valores en este archivo, no entra solo al contenedor. Sin esta lista el
+      # local carga las cuatro credenciales, reinicia, y el panel le sigue
+      # diciendo que faltan las cuatro, sin manera de darse cuenta por que.
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-}
+      # ── Cobros ──────────────────────────────────────────────────────────────
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
     volumes:
       # Aca viven las ventas del local. Sin este volumen, cada redeploy
       # empieza de cero.

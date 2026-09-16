@@ -11,11 +11,32 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 const resolveFromRoot = (p: string) => (path.isAbsolute(p) ? p : path.resolve(projectRoot, p));
 
+/**
+ * Un numero que viene del entorno, o el valor por omision.
+ *
+ * `Number(process.env.X ?? 5)` parece lo mismo y no lo es: `??` solo cubre
+ * `undefined`, y una variable que existe pero esta vacia —lo que pasa con
+ * `X: ${X:-}` en docker compose, o con una linea `X=` en el .env— llega como
+ * cadena vacia. `Number('')` da CERO, y un limite de intentos en cero no deja
+ * entrar a nadie: el panel queda cerrado y el mensaje que da es "demasiados
+ * intentos", que manda a buscar el problema al lado equivocado.
+ *
+ * Lo mismo con un `X=cinco` escrito a mano, que da NaN.
+ *
+ * Por eso se exige un numero positivo y usable. Todos los que pasan por aca
+ * son limites y plazos: un cero no es una configuracion valida, es un error de
+ * tipeo.
+ */
+const numeroDelEntorno = (valor: string | undefined, porOmision: number): number => {
+  const n = Number(valor?.trim());
+  return valor?.trim() && Number.isFinite(n) && n > 0 ? n : porOmision;
+};
+
 export const config = {
-  port: Number(process.env.PORT ?? 3000),
-  env: process.env.NODE_ENV ?? 'development',
+  port: numeroDelEntorno(process.env.PORT, 3000),
+  env: process.env.NODE_ENV?.trim() || 'development',
   projectRoot,
-  databasePath: resolveFromRoot(process.env.DATABASE_PATH ?? './data/comeia.db'),
+  databasePath: resolveFromRoot(process.env.DATABASE_PATH?.trim() || './data/comeia.db'),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || '',
   chatModel: process.env.CHAT_MODEL?.trim() || 'claude-opus-5',
   /**
@@ -39,19 +60,21 @@ export const config = {
    * Detras de un nginx o un Caddy es 1. Dejarlo en 0 cuando el proceso mira a
    * internet directo: si no, cualquiera falsea su IP y esquiva el limite.
    */
-  trustProxy: Number(process.env.TRUST_PROXY ?? 0),
+  // Ojo: aca el cero SI es un valor valido y querido —el proceso mira a
+  // internet directo—, asi que no puede pasar por numeroDelEntorno.
+  trustProxy: Number.isFinite(Number(process.env.TRUST_PROXY)) ? Number(process.env.TRUST_PROXY) : 0,
   /**
    * Intentos de ingreso por minuto y por IP. Cinco alcanzan para el que se
    * equivoco escribiendo y no para el que prueba un diccionario. Se puede
    * subir en desarrollo o en las pruebas.
    */
-  loginRateMax: Number(process.env.LOGIN_RATE_MAX ?? 5),
+  loginRateMax: numeroDelEntorno(process.env.LOGIN_RATE_MAX, 5),
   chatRateLimit: {
-    windowMs: Number(process.env.CHAT_RATE_WINDOW_MS ?? 60_000),
-    max: Number(process.env.CHAT_RATE_MAX ?? 20),
+    windowMs: numeroDelEntorno(process.env.CHAT_RATE_WINDOW_MS, 60_000),
+    max: numeroDelEntorno(process.env.CHAT_RATE_MAX, 20),
   },
-  currency: process.env.CURRENCY ?? 'ARS',
-  timezone: process.env.TIMEZONE ?? 'America/Argentina/Buenos_Aires',
+  currency: process.env.CURRENCY?.trim() || 'ARS',
+  timezone: process.env.TIMEZONE?.trim() || 'America/Argentina/Buenos_Aires',
 };
 
 /** Si no hay clave, el chatbot usa el motor determinista (reglas + fuzzy match). */

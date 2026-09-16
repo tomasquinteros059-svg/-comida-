@@ -301,6 +301,11 @@ eso el local manda mensajes pero no recibe ninguno.
 > respalda y esas copias terminan circulando. Un token adentro de un backup que
 > anda dando vueltas deja mandar mensajes en nombre del local.
 
+> Si agregás una variable nueva, tiene que estar listada en `environment:` de
+> `docker-compose.yml`. El `.env` solo sirve para completar valores **dentro de
+> ese archivo**: no entra solo al contenedor. Una variable que está en el
+> `.env` y no en esa lista no existe para el proceso, y no avisa.
+
 ### Cobros
 
 Cobrar a mano —efectivo, débito, transferencia— **funciona sin configurar

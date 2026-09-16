@@ -694,7 +694,7 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
       return {
         usuarios: [{
           id: 'usr_demo', name: 'Demo', username: 'demo', role: 'dueño',
-          active: true, created_at: ahora(), last_login_at: ahora(),
+          active: true, created_at: ahora(), last_login_at: ahora(), updated_at: ahora(),
         }],
         roles: [
           { rol: 'dueño', permisos: ['ventas', 'carta', 'stock', 'compras', 'cocina', 'bot', 'usuarios'] },
