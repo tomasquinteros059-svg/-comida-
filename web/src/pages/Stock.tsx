@@ -4,7 +4,7 @@ import { useLive } from '../lib/useLive';
 import { api } from '../lib/api';
 import { useAction } from '../lib/toast';
 import type { Ingredient, ReplenishmentPlan, StockAlert } from '../lib/types';
-import { Badge, Card, Empty, Field, Meter, Modal, Spinner } from '../components/ui';
+import { Badge, Card, Empty, Field, Meter, Modal, Seccion, Spinner } from '../components/ui';
 import { moneyExact } from '../lib/format';
 
 const LEVEL_TONE = { agotado: 'danger', critico: 'danger', bajo: 'warn' } as const;
@@ -45,76 +45,125 @@ export function StockPage() {
   };
 
   return (
-    <div className="stack">
-      <div className="row">
-        <Badge tone="danger">{counts.agotado} agotados</Badge>
-        <Badge tone="danger">{counts.critico} criticos</Badge>
-        <Badge tone="warn">{counts.bajo} bajos</Badge>
-        <div className="row tight" style={{ marginLeft: 'auto' }}>
-          <button className="btn" disabled={busy} onClick={() => replenish('normal')}>
-            Reponer normal
-          </button>
-          <button className="btn" disabled={busy} onClick={() => replenish('express')}>
-            Express (24 h)
-          </button>
-          <button className="btn primary" disabled={busy} onClick={() => replenish('inmediato')}>
-            {busy ? <Spinner /> : 'Pedir ya (4 h)'}
-          </button>
-        </div>
-      </div>
+    <div className="secciones">
+      {/* Lo que hay que comprar va arriba y marcado; el inventario entero es
+          consulta y va abajo. Son dos cosas distintas y se leen distinto. */}
+      <Seccion
+        titulo="Para reponer"
+        para="Lo que se acaba antes de que llegue el próximo pedido."
+        marcada
+        accion={
+          <div className="row tight">
+            <Badge tone="danger">{counts.agotado} agotados</Badge>
+            <Badge tone="danger">{counts.critico} criticos</Badge>
+            <Badge tone="warn">{counts.bajo} bajos</Badge>
+            <button className="btn" disabled={busy} onClick={() => replenish('normal')}>
+              Reponer normal
+            </button>
+            <button className="btn" disabled={busy} onClick={() => replenish('express')}>
+              Express (24 h)
+            </button>
+            <button className="btn primary" disabled={busy} onClick={() => replenish('inmediato')}>
+              {busy ? <Spinner /> : 'Pedir ya (4 h)'}
+            </button>
+          </div>
+        }
+      >
+        <Card tight>
+          {alerts.data.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Insumo</th>
+                    <th className="num">Stock</th>
+                    <th style={{ width: 120 }}>Nivel</th>
+                    <th className="num">Consumo/día</th>
+                    <th className="num">Alcanza</th>
+                    <th className="num">Sugerido</th>
+                    <th>Frena estos platos</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {alerts.data.map((alert) => (
+                    <tr key={alert.ingredient.id}>
+                      <td>
+                        <div className="row tight inline">
+                          <Badge tone={LEVEL_TONE[alert.level]}>{alert.level}</Badge>
+                          <span className="strong">{alert.ingredient.name}</span>
+                        </div>
+                      </td>
+                      <td className="num nowrap">
+                        {alert.ingredient.stock_qty} {alert.ingredient.unit}
+                        <div className="small faint">min {alert.ingredient.min_qty}</div>
+                      </td>
+                      <td>
+                        <Meter
+                          value={alert.ingredient.stock_qty}
+                          max={Math.max(alert.ingredient.par_qty, alert.ingredient.min_qty * 2, 1)}
+                          tone={LEVEL_TONE[alert.level] === 'danger' ? 'danger' : 'warn'}
+                        />
+                      </td>
+                      <td className="num">{alert.daily_usage || '—'}</td>
+                      <td className="num nowrap">
+                        {alert.days_left === null ? (
+                          <span className="faint">sin consumo</span>
+                        ) : (
+                          <span className={alert.days_left < 2 ? 'neg strong' : ''}>{alert.days_left} d</span>
+                        )}
+                      </td>
+                      <td className="num nowrap strong">
+                        {alert.suggested_qty} {alert.ingredient.unit}
+                      </td>
+                      <td className="small muted">
+                        {alert.blocks_products.join(', ') || '—'}
+                      </td>
+                      <td>
+                        <button className="btn ghost small" onClick={() => setAdjusting(alert.ingredient)}>
+                          Ajustar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <Empty icon="✓">Todos los insumos están por encima del mínimo</Empty>
+          )}
+        </Card>
+      </Seccion>
 
-      <Card title="Necesita reposición" tight>
-        {alerts.data.length ? (
+      <Seccion titulo="Todo el inventario" para="Para corregir stock, mínimos y costos.">
+        <Card tight>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Insumo</th>
                   <th className="num">Stock</th>
-                  <th style={{ width: 120 }}>Nivel</th>
-                  <th className="num">Consumo/día</th>
-                  <th className="num">Alcanza</th>
-                  <th className="num">Sugerido</th>
-                  <th>Frena estos platos</th>
+                  <th className="num">Mínimo</th>
+                  <th className="num">Objetivo</th>
+                  <th className="num">Costo unitario</th>
+                  <th className="num">Valorizado</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {alerts.data.map((alert) => (
-                  <tr key={alert.ingredient.id}>
+                {ingredients.data.map((ingredient) => (
+                  <tr key={ingredient.id}>
                     <td>
-                      <div className="row tight inline">
-                        <Badge tone={LEVEL_TONE[alert.level]}>{alert.level}</Badge>
-                        <span className="strong">{alert.ingredient.name}</span>
-                      </div>
+                      <span className="strong">{ingredient.name}</span>
+                      {ingredient.perishable && <> <Badge tone="warn">perecedero</Badge></>}
                     </td>
-                    <td className="num nowrap">
-                      {alert.ingredient.stock_qty} {alert.ingredient.unit}
-                      <div className="small faint">min {alert.ingredient.min_qty}</div>
-                    </td>
+                    <td className="num nowrap">{ingredient.stock_qty} {ingredient.unit}</td>
+                    <td className="num muted">{ingredient.min_qty}</td>
+                    <td className="num muted">{ingredient.par_qty}</td>
+                    <td className="num">{moneyExact(ingredient.cost_cents)}</td>
+                    <td className="num">{moneyExact(Math.round(ingredient.cost_cents * ingredient.stock_qty))}</td>
                     <td>
-                      <Meter
-                        value={alert.ingredient.stock_qty}
-                        max={Math.max(alert.ingredient.par_qty, alert.ingredient.min_qty * 2, 1)}
-                        tone={LEVEL_TONE[alert.level] === 'danger' ? 'danger' : 'warn'}
-                      />
-                    </td>
-                    <td className="num">{alert.daily_usage || '—'}</td>
-                    <td className="num nowrap">
-                      {alert.days_left === null ? (
-                        <span className="faint">sin consumo</span>
-                      ) : (
-                        <span className={alert.days_left < 2 ? 'neg strong' : ''}>{alert.days_left} d</span>
-                      )}
-                    </td>
-                    <td className="num nowrap strong">
-                      {alert.suggested_qty} {alert.ingredient.unit}
-                    </td>
-                    <td className="small muted">
-                      {alert.blocks_products.join(', ') || '—'}
-                    </td>
-                    <td>
-                      <button className="btn ghost small" onClick={() => setAdjusting(alert.ingredient)}>
+                      <button className="btn ghost small" onClick={() => setAdjusting(ingredient)}>
                         Ajustar
                       </button>
                     </td>
@@ -123,48 +172,8 @@ export function StockPage() {
               </tbody>
             </table>
           </div>
-        ) : (
-          <Empty icon="✓">Todos los insumos están por encima del mínimo</Empty>
-        )}
-      </Card>
-
-      <Card title="Todos los insumos" tight>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Insumo</th>
-                <th className="num">Stock</th>
-                <th className="num">Mínimo</th>
-                <th className="num">Objetivo</th>
-                <th className="num">Costo unitario</th>
-                <th className="num">Valorizado</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {ingredients.data.map((ingredient) => (
-                <tr key={ingredient.id}>
-                  <td>
-                    <span className="strong">{ingredient.name}</span>
-                    {ingredient.perishable && <> <Badge tone="warn">perecedero</Badge></>}
-                  </td>
-                  <td className="num nowrap">{ingredient.stock_qty} {ingredient.unit}</td>
-                  <td className="num muted">{ingredient.min_qty}</td>
-                  <td className="num muted">{ingredient.par_qty}</td>
-                  <td className="num">{moneyExact(ingredient.cost_cents)}</td>
-                  <td className="num">{moneyExact(Math.round(ingredient.cost_cents * ingredient.stock_qty))}</td>
-                  <td>
-                    <button className="btn ghost small" onClick={() => setAdjusting(ingredient)}>
-                      Ajustar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+        </Card>
+      </Seccion>
 
       {adjusting && (
         <AdjustModal

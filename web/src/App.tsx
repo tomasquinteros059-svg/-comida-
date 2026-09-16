@@ -147,7 +147,7 @@ function Panel({ sesion }: { sesion: Sesion }) {
           const header = r.section !== lastSection ? r.section : null;
           lastSection = r.section;
           return (
-            <div key={r.id}>
+            <div key={r.id} className={`nav-grupo${header ? ' arranca' : ''}`}>
               {header && <div className="nav-section">{header}</div>}
               <a
                 href={`#/${r.id}`}

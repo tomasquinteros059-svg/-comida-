@@ -206,6 +206,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card-body { padding: 16px; flex: 1; }
 .card-body.tight { padding: 0; }
 
+/* ── Secciones ───────────────────────────────────────────────────────────── */
+/* El aire entre secciones es más que el aire entre tarjetas: eso solo ya hace
+   que se lean como bloques y no como una fila larga de recuadros. */
+.secciones { display: flex; flex-direction: column; gap: 28px; }
+
+.seccion { display: flex; flex-direction: column; gap: 12px; }
+.seccion-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.seccion-head h2 { font-size: 1rem; }
+.seccion-head p { margin: 0; font-size: 0.82rem; color: var(--text-faint); }
+.seccion-head .spacer { margin-left: auto; }
+
+/* La sección de la que hay que ocuparse hoy se marca con una línea al costado:
+   es la única que pide hacer algo, y tiene que notarse sin leerla. */
+.seccion.hacer > .grid > .card,
+.seccion.hacer > .card { border-left: 3px solid var(--accent); }
+
 .stat { padding: 16px; }
 .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); font-weight: 600; }
 .stat-value { font-size: 1.65rem; font-weight: 680; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; }
@@ -429,6 +452,9 @@ tbody tr:hover { background: var(--surface-2); }
 /* ── Grafico de barras ───────────────────────────────────────────────────── */
 
 .bars { display: flex; align-items: stretch; gap: 4px; height: 100%; min-height: 140px; padding-top: 8px; }
+/* Un gráfico sin datos todavía es un renglón, no un hueco del alto del
+   gráfico: a las nueve de la mañana esa caja vacía es media pantalla. */
+.sin-datos { color: var(--text-faint); font-size: 0.86rem; }
 /* La columna necesita altura definida para que el % de la barra resuelva. */
 .bar-col {
   flex: 1;
@@ -498,10 +524,17 @@ tbody tr:hover { background: var(--surface-2); }
 .acceso-pie { font-size: 0.78rem; color: var(--text-faint); margin-top: 16px; line-height: 1.5; }
 
 .empty { padding: 34px 16px; text-align: center; color: var(--text-faint); }
+/* Una tarjeta sin nada adentro no se estira para igualar a la de al lado:
+   así no quedan 300 px de blanco pegados a lo que sí hay que mirar. */
+.grid > .card:has(> .card-body > .empty) { align-self: start; }
 .empty-icon { font-size: 1.6rem; display: block; margin-bottom: 6px; opacity: 0.65; }
 
 .muted { color: var(--text-soft); }
 .faint { color: var(--text-faint); }
+/* Una columna que en el teléfono no entra: se esconde ahí y el dato se
+   muestra abajo del nombre, en vez de cortarse al medio de una palabra. */
+.solo-angosto { display: none; }
+
 .small { font-size: 0.8rem; }
 .mono { font-family: var(--mono); font-size: 0.82rem; }
 .nowrap { white-space: nowrap; }
@@ -610,6 +643,23 @@ tbody tr:hover { background: var(--surface-2); }
   .card-head { flex-wrap: wrap; padding: 10px 13px; }
   .card-head .spacer { margin-left: 0; flex-basis: 100%; }
   .card-body { padding: 13px; }
+
+  .secciones { gap: 22px; }
+  .seccion-head { padding-bottom: 6px; }
+  .seccion-head p { flex-basis: 100%; }
+
+  .solo-ancho { display: none; }
+  .solo-angosto { display: block; }
+
+  /* El rótulo del grupo no entra en una fila que se desliza, pero la
+     separación sí: queda la línea, que es lo que se estaba perdiendo. */
+  /* Todos los que arrancan grupo menos el primero: ahí no hay nada que
+     separar todavía. */
+  .nav-grupo.arranca ~ .nav-grupo.arranca {
+    border-left: 1px solid var(--border);
+    margin-left: 7px;
+    padding-left: 7px;
+  }
 
   .kds { grid-template-columns: 1fr; }
   .chat-log { height: 46vh; min-height: 240px; }

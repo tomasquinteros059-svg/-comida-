@@ -15,11 +15,47 @@ export function Card({
     <section className="card">
       {(title || action) && (
         <header className="card-head">
-          {typeof title === 'string' ? <h2>{title}</h2> : title}
+          {typeof title === 'string' ? <h3>{title}</h3> : title}
           {action && <div className="spacer">{action}</div>}
         </header>
       )}
       <div className={`card-body${tight ? ' tight' : ''}`}>{children}</div>
+    </section>
+  );
+}
+
+/**
+ * Una franja de la pantalla, con nombre y con un renglón que dice para qué
+ * sirve mirarla.
+ *
+ * Una pantalla sin esto es una fila de recuadros todos iguales: hay que
+ * leerlos uno por uno para darse cuenta de cuál importa, y la relación entre
+ * el de la izquierda y el de la derecha queda librada a la suerte. Agrupados
+ * y con título, se entiende de una pasada qué mirar y en qué orden.
+ */
+export function Seccion({
+  titulo,
+  para,
+  accion,
+  marcada,
+  children,
+}: {
+  titulo: string;
+  /** Para qué sirve el bloque. Un renglón, en castellano, no un subtítulo. */
+  para?: string;
+  accion?: ReactNode;
+  /** La sección que pide hacer algo. Se marca al costado. Una por pantalla. */
+  marcada?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`seccion${marcada ? ' hacer' : ''}`}>
+      <header className="seccion-head">
+        <h2>{titulo}</h2>
+        {para && <p>{para}</p>}
+        {accion && <div className="spacer">{accion}</div>}
+      </header>
+      {children}
     </section>
   );
 }
@@ -138,7 +174,7 @@ export function BarChart({
   format?: (value: number) => string;
 }) {
   const max = Math.max(1, ...data.map((d) => d.value));
-  if (!data.length) return <Empty>Sin datos en el periodo</Empty>;
+  if (!data.length) return <p className="sin-datos">Todavía no hubo ventas en este período.</p>;
   return (
     <div className="bars">
       {data.map((d) => (

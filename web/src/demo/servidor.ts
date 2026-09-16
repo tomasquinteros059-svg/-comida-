@@ -531,12 +531,16 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
     // ── Carta ──
     case 'GET /menu/products':
       return estado.productos.filter((p) => q.get('all') === '1' || p.active).map(conCategoria);
+    // Las tres listas sueltas, como las devuelve el servidor de verdad. La
+    // pantalla de la carta lee `products` directo: anidarlos adentro de cada
+    // categoría dejaba `products` sin definir y la pantalla no abría.
     case 'GET /menu':
       return {
-        categories: datos.categories.map((c) => ({
-          ...c,
-          products: estado.productos.filter((p) => p.category_id === c.id).map(conCategoria),
-        })),
+        categories: datos.categories,
+        products: estado.productos
+          .filter((p) => q.get('all') === '1' || p.active)
+          .map(conCategoria),
+        modifier_groups: [],
       };
     case 'GET /menu/text':
       return {
@@ -655,7 +659,7 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
     // ── Caja ──
     case 'GET /cobros/estado':
       return {
-        mercadopago: { activo: false, falta: ['esto es una demo'] },
+        mercadopago: { activo: false, falta: ['la configuración de Mercado Pago (esto es una demo)'] },
         medios: ['efectivo', 'debito', 'credito', 'transferencia', 'mercadopago', 'otro'],
       };
     case 'GET /cobros/pendientes': {
