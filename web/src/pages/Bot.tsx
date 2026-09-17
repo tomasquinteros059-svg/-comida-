@@ -114,12 +114,50 @@ function Retencion() {
   );
 }
 
+type Origen = 'entorno' | 'panel' | 'falta';
+
 interface EstadoWhatsapp {
   activo: boolean;
   falta: string[];
   numero_id: string;
   version: string;
+  origen: Record<string, Origen>;
+  se_puede_cargar: boolean;
 }
+
+/**
+ * Las cuatro credenciales de Meta, en el orden en que aparecen en su pantalla.
+ *
+ * El texto de ayuda de cada una es la mitad del trabajo: son cuatro valores
+ * que se parecen entre sí y están en tres pantallas distintas de Meta, y
+ * confundirlos es la forma habitual de perder una tarde.
+ */
+const CREDENCIALES = [
+  {
+    campo: 'phoneNumberId',
+    etiqueta: 'Identificador del número',
+    ayuda: 'En "API de WhatsApp", abajo del teléfono. Son dígitos: NO es el teléfono.',
+    secreto: false,
+  },
+  {
+    campo: 'token',
+    etiqueta: 'Token de acceso',
+    ayuda: 'El temporal dura 24 h. Para el local hace falta uno permanente (System User).',
+    secreto: true,
+  },
+  {
+    campo: 'verifyToken',
+    etiqueta: 'Palabra de verificación',
+    ayuda: 'La inventás vos. La misma que pongas acá va en Meta, al dar de alta el webhook.',
+    secreto: false,
+  },
+  {
+    campo: 'appSecret',
+    etiqueta: 'Clave secreta de la app',
+    ayuda: 'En Configuración → Básica de la app. Es con lo que se comprueba que el mensaje vino de Meta.',
+    secreto: true,
+  },
+] as const;
 
 interface Diagnostico {
   paso: string;
@@ -135,16 +173,49 @@ interface Diagnostico {
  * mal el error que devuelve Meta no dice cuál. Esta tarjeta prueba cada una
  * por separado y dice qué hacer, para no perder la tarde probando de a una.
  *
- * Las credenciales no se cargan desde acá a propósito: van en el .env del
- * servidor. La base se copia todas las noches, y esas copias andan dando
- * vueltas; el token de WhatsApp no tiene por qué viajar en ellas.
+ * Las credenciales se cargan desde acá y se guardan CIFRADAS, con una clave
+ * que no está en la base. Antes iban solo en el .env del servidor, que está
+ * bien para el que lo administra y es una pared para el dueño del local:
+ * "conectá WhatsApp" terminaba siendo "conseguite a alguien con SSH".
+ *
+ * La razón de no guardarlas en claro sigue en pie: la base se copia todas las
+ * noches y esas copias andan dando vueltas. Cifradas, una copia perdida no
+ * alcanza para mandar mensajes en nombre del local.
  */
 function Whatsapp() {
-  const { data } = useApi<EstadoWhatsapp>('/canales/whatsapp');
+  const { data, reload } = useApi<EstadoWhatsapp>('/canales/whatsapp');
   const run = useAction();
   const { notify } = useToast();
   const [pasos, setPasos] = useState<Diagnostico[] | null>(null);
   const [probando, setProbando] = useState(false);
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [editando, setEditando] = useState(false);
+
+  /**
+   * La palabra de verificación la inventa el local, y "inventá una palabra"
+   * termina siendo "whatsapp123". Se propone una al azar.
+   */
+  const sugerirPalabra = () => {
+    const azar = crypto.getRandomValues(new Uint8Array(12));
+    const palabra = Array.from(azar, (b) => b.toString(16).padStart(2, '0')).join('');
+    setValores((v) => ({ ...v, verifyToken: palabra }));
+  };
+
+  const guardar = () =>
+    void run(async () => {
+      await api.put('/canales/whatsapp', valores);
+      setValores({});
+      setEditando(false);
+      await reload();
+      // Guardar y no probar deja al local sin saber si sirvieron: se prueba
+      // solo, que es lo que iba a hacer igual.
+      const r = await api.post<{ listo: boolean; pasos: Diagnostico[] }>('/canales/whatsapp/probar');
+      setPasos(r.pasos);
+      notify(
+        r.listo ? 'WhatsApp está conectado' : 'Guardado. Mirá los pasos de abajo',
+        r.listo ? 'ok' : 'info',
+      );
+    });
 
   const probar = () =>
     void run(async () => {
@@ -187,9 +258,9 @@ function Whatsapp() {
             <strong>WhatsApp no está conectado.</strong> Falta {data.falta.join(', ')}.
           </span>
           <span className="small">
-            Se cargan en el archivo <code>.env</code> del servidor y después{' '}
-            <code>docker compose up -d</code>. En el panel no se cargan a propósito: la base se
-            copia todas las noches y el token no tiene por qué viajar en las copias.
+            Se sacan de <code>developers.facebook.com</code> y se pegan acá abajo. Si preferís que
+            las ponga el que administra el servidor, también se pueden dejar en el{' '}
+            <code>.env</code>: esas le ganan a las de acá.
           </span>
         </div>
         )
@@ -210,6 +281,70 @@ function Whatsapp() {
             </div>
           ))}
         </div>
+      )}
+
+      {(editando || !data.activo) && data.se_puede_cargar && (
+        <div className="stack" style={{ marginBottom: 14 }}>
+          {CREDENCIALES.map((c) => {
+            const origen = data.origen?.[c.campo] ?? 'falta';
+            const delServidor = origen === 'entorno';
+            return (
+              <Field
+                key={c.campo}
+                label={
+                  `${c.etiqueta}${origen === 'panel' ? ' · ya cargada' : ''}` +
+                  (delServidor ? ' · la pone el servidor' : '')
+                }
+                hint={delServidor ? 'Viene del .env: desde acá no se puede cambiar.' : c.ayuda}
+              >
+                <div className="row tight">
+                  <input
+                    className="input"
+                    type={c.secreto ? 'password' : 'text'}
+                    autoComplete="off"
+                    disabled={delServidor}
+                    value={valores[c.campo] ?? ''}
+                    placeholder={origen === 'panel' ? '•••••••• (dejalo vacío para no cambiarla)' : ''}
+                    onChange={(e) => setValores((v) => ({ ...v, [c.campo]: e.target.value }))}
+                  />
+                  {c.campo === 'verifyToken' && !delServidor && (
+                    <button className="btn ghost small nowrap" onClick={sugerirPalabra}>
+                      Inventar una
+                    </button>
+                  )}
+                </div>
+              </Field>
+            );
+          })}
+
+          <div className="row tight">
+            <button
+              className="btn primary small"
+              disabled={Object.values(valores).every((v) => !v?.trim())}
+              onClick={guardar}
+            >
+              Guardar y probar
+            </button>
+            {editando && (
+              <button className="btn ghost small" onClick={() => { setValores({}); setEditando(false); }}>
+                Cancelar
+              </button>
+            )}
+          </div>
+
+          <p className="small muted">
+            Se guardan cifradas con una clave que no está en la base: una copia de
+            respaldo perdida no alcanza para mandar mensajes en nombre del local.
+          </p>
+        </div>
+      )}
+
+      {data.activo && !editando && (
+        <p className="small" style={{ marginBottom: 14 }}>
+          <button className="btn ghost small" onClick={() => setEditando(true)}>
+            Cambiar las credenciales
+          </button>
+        </p>
       )}
 
       <Field

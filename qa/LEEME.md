@@ -1,13 +1,31 @@
 # QA contra la pila de verdad
 
-`npm test` corre 256 tests de unidad y no toca ni el contenedor, ni el
+`npm test` corre 291 tests de unidad y no toca ni el contenedor, ni el
 navegador, ni la demo. Lo que hay acá es lo otro: las cosas que solo se rompen
 cuando las piezas están juntas.
 
-Las cuatro salieron de bugs reales, y cada una está acá porque el bug que la
-motivó **no lo agarraba ningún test de unidad**.
+Cada suite está acá porque el bug que la motivó **no lo agarraba ningún test de
+unidad**.
 
-## Correrlas
+## Todo junto
+
+```bash
+npm --prefix qa install    # trae playwright; una sola vez
+npx playwright install     # y el navegador, si no lo tenés
+./qa/correr-todo.sh
+```
+
+Son 144 casos en ocho suites, cada una sobre una pila recién levantada. Eso
+último importa: sin pila limpia las suites se ensucian entre sí —una le cambia
+la clave a un usuario que la siguiente usa, otra agota el límite de intentos a
+propósito— y el resultado no dice nada del producto, solo del orden en que se
+corrieron.
+
+Las suites viven en `qa/suites/`. Van numeradas en el orden en que conviene
+leerlas: acceso, flujo operativo, claves, bitácora, canales, y las tres del
+navegador.
+
+## Las sueltas
 
 Necesitan la pila levantada y sembrada:
 
@@ -40,6 +58,13 @@ node qa/whatsapp-cargado.mjs
 escribe, el bot toma el pedido, la cocina lo mueve y al cliente le llega el
 aviso. Necesita las credenciales puestas, igual que el anterior.
 
+`qa/whatsapp-desde-el-panel.mjs` no necesita ninguna: prueba justamente
+cargarlas desde el panel. Corre con la pila normal.
+
+```bash
+node qa/whatsapp-desde-el-panel.mjs
+```
+
 ## Qué mira cada una, y por qué
 
 **`paridad-demo.mts`** — pide las 21 rutas que el panel pide de verdad a los
@@ -70,6 +95,13 @@ al contenedor**. `docker-compose.yml` no las listaba, y el `.env` solo sirve
 para completar valores dentro de ese archivo —no entra solo al contenedor—.
 El local podía cargar las cuatro credenciales bien, reiniciar, y el panel le
 seguía diciendo que faltaban las cuatro, sin manera de darse cuenta por qué.
+
+**`whatsapp-desde-el-panel.mjs`** — conectar WhatsApp sin tocar el servidor,
+que es el caso del dueño del local: no tiene SSH y no tiene por qué tenerlo.
+Los tres casos que importan no son que funcione, sino que **el token no quede
+legible en la base** —se respalda todas las noches y esas copias circulan—,
+que el panel nunca devuelva lo que guardó, y que una variable de entorno le
+siga ganando a lo cargado desde el panel.
 
 **`whatsapp-avisos.mjs`** — el circuito completo: el cuerpo crudo que firma
 Meta, el pedido que llega al panel, el aviso que sale de un cambio de estado

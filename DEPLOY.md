@@ -279,11 +279,21 @@ Es el canal que de verdad usa la gente. El motor del chat es el mismo: toma el
 pedido igual venga del web o de WhatsApp.
 
 1. Creá una app de WhatsApp Business en `developers.facebook.com`.
-2. Completá `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TOKEN`, `WHATSAPP_APP_SECRET`
-   y una `WHATSAPP_VERIFY_TOKEN` que inventás vos.
-3. Dando de alta el webhook, apuntalo a `https://tu-dominio/api/whatsapp` y
-   pegá la misma palabra de verificación.
-4. Entrá a **Bot → WhatsApp del local** y tocá **Probar conexión**.
+2. Entrá a **Bot → WhatsApp del local** y pegá las cuatro credenciales ahí
+   mismo. La palabra de verificación la inventás vos, y hay un botón que la
+   propone. Tocá **Guardar y probar**.
+3. Dando de alta el webhook en Meta, apuntalo a `https://tu-dominio/api/whatsapp`
+   y pegá la misma palabra de verificación.
+
+Las credenciales se guardan **cifradas**, con una clave que sale del
+`ADMIN_TOKEN` y no está en la base: una copia de respaldo perdida no alcanza
+para mandar mensajes en nombre del local. Si alguna vez cambiás el
+`ADMIN_TOKEN`, hay que volver a cargarlas —un minuto, y pasa una vez—.
+
+También se pueden dejar en el `.env` (`WHATSAPP_PHONE_NUMBER_ID`,
+`WHATSAPP_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`). **Esas le
+ganan a las del panel**: el que administra el servidor tiene la última
+palabra, y una instalación que ya andaba así sigue igual.
 
 Ese botón existe porque las cuatro credenciales se parecen entre sí y, cuando
 una está mal, el error de Meta no dice cuál. Prueba cada cosa por separado
@@ -334,9 +344,10 @@ Editar**. Con un solo local se puede dejar vacío y todo sigue igual.
 Si llega un mensaje a un número que ningún local tiene cargado, se atiende en
 el principal y queda un aviso en el registro. Perder el mensaje sería peor.
 
-> Las credenciales van por variables de entorno y **no** en la base: la base se
-> respalda y esas copias terminan circulando. Un token adentro de un backup que
-> anda dando vueltas deja mandar mensajes en nombre del local.
+> Nunca se guarda una credencial en claro. La base se respalda todas las noches
+> y esas copias terminan circulando —en un pendrive, en un mail, en la nube de
+> alguien—: un token legible adentro de una copia perdida deja mandar mensajes
+> en nombre del local.
 
 > Si agregás una variable nueva, tiene que estar listada en `environment:` de
 > `docker-compose.yml`. El `.env` solo sirve para completar valores **dentro de

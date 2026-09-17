@@ -14,7 +14,11 @@ import {
   responderVerificacion,
   whatsappActivo,
   probarWhatsapp,
+  CREDENCIALES,
+  guardarCredenciales,
+  origenDeCredenciales,
 } from '../domain/whatsapp.js';
+import { sePuedeGuardar } from '../domain/secretos.js';
 import { route } from '../lib/http.js';
 import { enLocal, hayVariosLocales, localPorWhatsapp } from '../db/locales.js';
 
@@ -138,7 +142,25 @@ export const whatsappEstado = () => {
     falta: loQueFaltaDeWhatsapp(),
     numero_id: c.phoneNumberId ? `…${c.phoneNumberId.slice(-4)}` : '',
     version: c.version,
+    // De donde sale cada una. El panel usa esto para no volver a pedir lo que
+    // ya esta, y para no dejar editar lo que manda el servidor.
+    origen: origenDeCredenciales(),
+    // Con las credenciales en el .env, el panel no las puede cambiar: gana la
+    // variable de entorno.
+    se_puede_cargar: sePuedeGuardar(),
   };
+};
+
+/** Guarda lo que cargaron en el panel. Nunca devuelve lo guardado. */
+export const guardarDesdeElPanel = (body: unknown) => {
+  const entrada = (body ?? {}) as Record<string, unknown>;
+  const limpio: Record<string, string> = {};
+  for (const { campo } of CREDENCIALES) {
+    const valor = entrada[campo];
+    if (typeof valor === 'string') limpio[campo] = valor;
+  }
+  guardarCredenciales(limpio);
+  return whatsappEstado();
 };
 
 /** Revisa la conexion con Meta y dice que falta, paso por paso. */

@@ -1,0 +1,9 @@
+{
+  "name": "@comeia/qa",
+  "private": true,
+  "type": "module",
+  "description": "Las suites de QA contra la pila real. Aparte del proyecto porque traen un navegador entero.",
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

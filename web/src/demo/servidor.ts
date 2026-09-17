@@ -642,6 +642,9 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
         falta: ['la configuración de Meta (esto es una demo, no hay servidor)'],
         numero_id: '',
         version: 'v21.0',
+        origen: { phoneNumberId: 'falta', token: 'falta', verifyToken: 'falta', appSecret: 'falta' },
+        // En la demo no hay dónde guardarlas: corre entera adentro del navegador.
+        se_puede_cargar: false,
       };
     case 'POST /canales/whatsapp/probar':
       return {

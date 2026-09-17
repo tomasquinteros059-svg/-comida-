@@ -11,3 +11,7 @@ data/*.db-wal
 coverage/
 .vite/
 *.tsbuildinfo
+
+# Las suites de QA traen su propio navegador, y dejan capturas al correr.
+qa/node_modules
+qa/suites/*.png

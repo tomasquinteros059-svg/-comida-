@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { get, run } from '../db/index.js';
 import { config } from '../config.js';
+import { badRequest } from '../lib/http.js';
+import { guardarSecreto, hayGuardado, leerSecreto, sePuedeGuardar } from './secretos.js';
 import { createConversation } from './conversations.js';
 
 /**
@@ -29,13 +31,65 @@ export interface ConfigWhatsapp {
   version: string;
 }
 
+/**
+ * De dónde salen las credenciales.
+ *
+ * Primero la variable de entorno y después la base. Ese orden importa: el que
+ * administra el servidor tiene la última palabra, y una instalación que ya
+ * andaba con el .env sigue andando igual sin tocar nada.
+ *
+ * Lo que está en la base está CIFRADO con una clave que no está en la base
+ * (ver secretos.ts). El dueño del local las carga desde el panel sin pedirle
+ * SSH a nadie, y una copia de la base robada no alcanza para mandar mensajes
+ * en nombre del local.
+ */
+const credencial = (variable: string, guardada: string): string =>
+  process.env[variable]?.trim() || leerSecreto(guardada);
+
 export const configWhatsapp = (): ConfigWhatsapp => ({
-  phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() ?? '',
-  token: process.env.WHATSAPP_TOKEN?.trim() ?? '',
-  verifyToken: process.env.WHATSAPP_VERIFY_TOKEN?.trim() ?? '',
-  appSecret: process.env.WHATSAPP_APP_SECRET?.trim() ?? '',
+  phoneNumberId: credencial('WHATSAPP_PHONE_NUMBER_ID', 'whatsapp.phone_number_id'),
+  token: credencial('WHATSAPP_TOKEN', 'whatsapp.token'),
+  verifyToken: credencial('WHATSAPP_VERIFY_TOKEN', 'whatsapp.verify_token'),
+  appSecret: credencial('WHATSAPP_APP_SECRET', 'whatsapp.app_secret'),
   version: process.env.WHATSAPP_API_VERSION?.trim() || 'v21.0',
 });
+
+/** Los cuatro nombres, para guardarlas y para decir cuál viene de dónde. */
+export const CREDENCIALES = [
+  { campo: 'phoneNumberId', variable: 'WHATSAPP_PHONE_NUMBER_ID', guardada: 'whatsapp.phone_number_id' },
+  { campo: 'token', variable: 'WHATSAPP_TOKEN', guardada: 'whatsapp.token' },
+  { campo: 'verifyToken', variable: 'WHATSAPP_VERIFY_TOKEN', guardada: 'whatsapp.verify_token' },
+  { campo: 'appSecret', variable: 'WHATSAPP_APP_SECRET', guardada: 'whatsapp.app_secret' },
+] as const;
+
+/**
+ * Guarda las credenciales que vinieron del panel.
+ *
+ * Solo lo que se manda: el que quiere cambiar el token no tiene que volver a
+ * pegar las otras tres. Vacío borra, que es como se desconecta un local.
+ */
+export function guardarCredenciales(input: Partial<Record<string, string>>): void {
+  if (!sePuedeGuardar()) {
+    throw badRequest(
+      'Falta ADMIN_TOKEN en el servidor: sin eso no hay con qué cifrar las credenciales',
+    );
+  }
+  for (const { campo, guardada } of CREDENCIALES) {
+    const valor = input[campo];
+    if (valor !== undefined) guardarSecreto(guardada, valor);
+  }
+}
+
+/** De dónde salió cada una. El panel lo muestra para no pedir lo que ya está. */
+export function origenDeCredenciales(): Record<string, 'entorno' | 'panel' | 'falta'> {
+  const salida: Record<string, 'entorno' | 'panel' | 'falta'> = {};
+  for (const { campo, variable, guardada } of CREDENCIALES) {
+    if (process.env[variable]?.trim()) salida[campo] = 'entorno';
+    else if (hayGuardado(guardada)) salida[campo] = 'panel';
+    else salida[campo] = 'falta';
+  }
+  return salida;
+}
 
 /** Está activo cuando tiene con qué recibir y con qué contestar. */
 export function whatsappActivo(): boolean {
@@ -47,10 +101,10 @@ export function whatsappActivo(): boolean {
 export function loQueFaltaDeWhatsapp(): string[] {
   const c = configWhatsapp();
   const falta: string[] = [];
-  if (!c.phoneNumberId) falta.push('el identificador del número (WHATSAPP_PHONE_NUMBER_ID)');
-  if (!c.token) falta.push('el token de la app (WHATSAPP_TOKEN)');
-  if (!c.verifyToken) falta.push('la palabra de verificación (WHATSAPP_VERIFY_TOKEN)');
-  if (!c.appSecret) falta.push('la clave secreta de la app (WHATSAPP_APP_SECRET)');
+  if (!c.phoneNumberId) falta.push('el identificador del número');
+  if (!c.token) falta.push('el token de la app');
+  if (!c.verifyToken) falta.push('la palabra de verificación');
+  if (!c.appSecret) falta.push('la clave secreta de la app');
   return falta;
 }
 

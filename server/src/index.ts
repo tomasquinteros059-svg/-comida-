@@ -8,7 +8,7 @@ import { closeDb, db } from './db/index.js';
 import { errorHandler } from './lib/http.js';
 import { requireAuth, requireAuthStream, requirePermiso, type Actor } from './lib/auth.js';
 import { authRouter } from './routes/auth.js';
-import { whatsappRouter, whatsappEstado, probarConexion } from './routes/whatsapp.js';
+import { whatsappRouter, whatsappEstado, probarConexion, guardarDesdeElPanel } from './routes/whatsapp.js';
 import { cobrosRouter, cobrosWebhookRouter } from './routes/cobros.js';
 import { localesRouter } from './routes/locales.js';
 import { resolverLocal } from './lib/local.js';
@@ -126,6 +126,15 @@ export function createApp() {
   // entre cuatro credenciales parecidas, y el error de Meta no dice cual falla.
   app.post('/api/canales/whatsapp/probar', requirePermiso('bot'), (_req, res, next) => {
     probarConexion().then((r) => res.json(r)).catch(next);
+  });
+  // Cargar las credenciales desde el panel, sin pedirle SSH al dueño del
+  // local. Se guardan cifradas; ver domain/secretos.ts.
+  app.put('/api/canales/whatsapp', requirePermiso('bot'), (req, res, next) => {
+    try {
+      res.json(guardarDesdeElPanel(req.body));
+    } catch (err) {
+      next(err);
+    }
   });
   // Los avisos al cliente: que le llegue por WhatsApp cuando su pedido esta
   // listo. Es del que maneja el bot, igual que el resto del canal.
