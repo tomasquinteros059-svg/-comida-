@@ -25,6 +25,17 @@ Las suites viven en `qa/suites/`. Van numeradas en el orden en que conviene
 leerlas: acceso, flujo operativo, claves, bitácora, canales, y las tres del
 navegador.
 
+## Antes de conectar WhatsApp
+
+`qa/comprobar-webhook.mjs` no prueba el producto: prueba **tu instalación**,
+desde afuera, con lo mismo que va a probar Meta. Meta valida el webhook una
+sola vez y, si algo falla, contesta "The callback URL or verify token couldn't
+be validated" sin decir qué. Esto lo dice.
+
+```bash
+node qa/comprobar-webhook.mjs https://tu-direccion LA-PALABRA
+```
+
 ## Las sueltas
 
 Necesitan la pila levantada y sembrada:

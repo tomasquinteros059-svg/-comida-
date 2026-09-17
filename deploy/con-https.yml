@@ -1,0 +1,45 @@
+# HTTPS automático, para cuando el local tiene un dominio propio.
+#
+# Se usa ENCIMA del docker-compose.yml de siempre, no en lugar de él:
+#
+#   DOMINIO=pedidos.milocal.com.ar \
+#     docker compose -f docker-compose.yml -f deploy/con-https.yml up -d
+#
+# Caddy saca y renueva el certificado solo, de Let's Encrypt. Lo único que hay
+# que hacer antes es apuntar el dominio a la IP del servidor (un registro A) y
+# tener los puertos 80 y 443 abiertos: el 80 no es opcional, es por donde
+# Let's Encrypt comprueba que el dominio es tuyo.
+#
+# Con esto puesto, la dirección que va en Meta es:
+#   https://TU-DOMINIO/api/whatsapp
+services:
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: "${DOMINIO:?falta DOMINIO, por ejemplo pedidos.milocal.com.ar}"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Los certificados viven acá. Sin este volumen, cada reinicio pide uno
+      # nuevo y Let's Encrypt corta por límite de pedidos.
+      - caddy-datos:/data
+      - caddy-config:/config
+    depends_on:
+      - comeia
+
+  comeia:
+    # Detrás del proxy el puerto deja de mirar al host: entra todo por Caddy.
+    ports: !override []
+    environment:
+      # Con un proxy adelante hay que confiar en su X-Forwarded-For, o el
+      # límite de intentos cuenta la IP del proxy y no la del que golpea.
+      TRUST_PROXY: "1"
+      # La dirección pública, que Mercado Pago necesita para la vuelta del pago.
+      PUBLIC_URL: "https://${DOMINIO}"
+
+volumes:
+  caddy-datos:
+  caddy-config:

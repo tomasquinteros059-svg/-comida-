@@ -278,12 +278,72 @@ Los dos son **opcionales** y el sistema funciona sin ninguno.
 Es el canal que de verdad usa la gente. El motor del chat es el mismo: toma el
 pedido igual venga del web o de WhatsApp.
 
-1. Creá una app de WhatsApp Business en `developers.facebook.com`.
-2. Entrá a **Bot → WhatsApp del local** y pegá las cuatro credenciales ahí
-   mismo. La palabra de verificación la inventás vos, y hay un botón que la
-   propone. Tocá **Guardar y probar**.
-3. Dando de alta el webhook en Meta, apuntalo a `https://tu-dominio/api/whatsapp`
-   y pegá la misma palabra de verificación.
+#### El orden importa
+
+Meta valida el webhook **una sola vez y en el momento**: si el servidor no
+contesta bien en ese instante, muestra *"The callback URL or verify token
+couldn't be validated"* y nada más. No dice cuál de las cinco cosas falló. Por
+eso conviene dejar el servidor andando ANTES de tocar nada en Meta.
+
+**Paso 0 — una dirección pública con HTTPS.** Es el único paso que no se puede
+saltear: Meta no acepta `http`, ni una IP, ni un certificado vencido.
+
+Para probar hoy, sin comprar nada:
+
+```bash
+docker compose up -d
+./deploy/tunel.sh          # te da una https://algo.trycloudflare.com
+```
+
+Para el local todos los días, con dominio propio:
+
+```bash
+DOMINIO=pedidos.milocal.com.ar   docker compose -f docker-compose.yml -f deploy/con-https.yml up -d
+```
+
+Caddy saca y renueva el certificado solo. Antes hay que apuntar el dominio a
+la IP del servidor y abrir los puertos 80 y 443 —el 80 no es opcional: es por
+donde Let's Encrypt comprueba que el dominio es tuyo—.
+
+**Paso 1 — la app en Meta.** En `developers.facebook.com`: *Crear app* →
+*Otro* → *Empresa*, y agregarle el producto **WhatsApp**. Meta da un número de
+prueba gratis que puede escribirle a hasta 5 teléfonos que registres: alcanza
+para probar todo antes de meter el número del local.
+
+**Paso 2 — las cuatro credenciales, en el panel.** En **Bot → WhatsApp del
+local**:
+
+| Qué | Dónde está en Meta |
+|---|---|
+| Identificador del número | *API de WhatsApp*, abajo del teléfono. Son dígitos, **no es el teléfono** |
+| Token de acceso | *API de WhatsApp*. El temporal dura 24 h; para el local hace falta uno permanente (System User) |
+| Palabra de verificación | **La inventás vos.** Hay un botón que la propone |
+| Clave secreta de la app | *Configuración → Básica*, en "Clave secreta de la aplicación" |
+
+**Guardar y probar** las guarda y comprueba la conexión de una.
+
+**Paso 3 — comprobar antes de pegar.** Esto revisa desde afuera lo mismo que
+va a revisar Meta, y dice cuál falla:
+
+```bash
+node qa/comprobar-webhook.mjs https://tu-direccion LA-PALABRA
+```
+
+Hasta que ese comando no diga que está todo bien, no sigas: Meta te va a
+rechazar el alta sin explicar por qué.
+
+**Paso 4 — dar de alta el webhook.** En la app de Meta, *WhatsApp →
+Configuración → Webhooks → Editar*:
+
+- **URL de devolución de llamada:** `https://tu-direccion/api/whatsapp`
+- **Token de verificación:** la misma palabra del paso 2
+
+Verificar y guardar. Después, en *Campos del webhook*, suscribite a
+**`messages`**. Sin esa suscripción el alta queda bien y no llega ni un
+mensaje: es el olvido más común de todos.
+
+**Paso 5 — probarlo.** Escribile al número desde tu WhatsApp. El bot tiene que
+contestar, y el pedido tiene que aparecer en **Cocina**.
 
 Las credenciales se guardan **cifradas**, con una clave que sale del
 `ADMIN_TOKEN` y no está en la base: una copia de respaldo perdida no alcanza

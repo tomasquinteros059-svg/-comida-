@@ -15,3 +15,6 @@ coverage/
 # Las suites de QA traen su propio navegador, y dejan capturas al correr.
 qa/node_modules
 qa/suites/*.png
+
+# El binario del tunel se baja solo la primera vez.
+deploy/.cloudflared

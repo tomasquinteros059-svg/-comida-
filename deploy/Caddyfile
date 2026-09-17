@@ -1,48 +1,17 @@
-# comeIA — proxy con HTTPS automático.
+# Lo único que hace: poner HTTPS adelante de comeIA.
 #
-#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-#   sudo systemctl reload caddy
-#
-# Caddy saca y renueva el certificado de Let's Encrypt solo, sin cron ni
-# certbot. Lo único que hace falta es que el registro A del dominio apunte a
-# la IP del servidor ANTES de recargar: si no, la validación falla.
+# Caddy pide el certificado a Let's Encrypt la primera vez y lo renueva solo.
+# No hay nada que configurar ni que renovar a mano.
+{$DOMINIO} {
+	# El panel, el chat y el webhook de WhatsApp: todo es el mismo proceso.
+	reverse_proxy comeia:3000
 
-pedidos.tulocal.com.ar {
-	encode zstd gzip
-
-	reverse_proxy 127.0.0.1:3000 {
-		# El límite del chat cuenta por IP. Sin estas cabeceras, todas las
-		# consultas parecen venir del proxy y el límite se aplica a todo el
-		# local junto. Van con TRUST_PROXY=1 en el .env.
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
-
-		# El chat es un stream: sin esto, el panel se entera de los cambios de
-		# stock recién cuando el buffer se llena.
-		flush_interval -1
-	}
-
-	# El panel es de uso interno del local: no tiene por qué estar indexado.
-	header /* {
-		X-Robots-Tag "noindex, nofollow"
-	}
+	# Meta manda el cuerpo del webhook y lo firma: si algo lo tocara en el
+	# camino, la firma no coincidiría. Caddy no lo toca, pero se deja dicho.
+	encode gzip
 
 	log {
-		output file /var/log/caddy/comeia.log {
-			roll_size 20mb
-			roll_keep 5
-		}
+		output file /data/acceso.log
+		format console
 	}
 }
-
-# ── Si además querés servir el chat embebido en el sitio del local ───────────
-# Descomentá y agregá ese dominio a ALLOWED_ORIGINS en el .env, o el navegador
-# va a bloquear las llamadas por CORS.
-#
-# tulocal.com.ar {
-# 	root * /var/www/tulocal
-# 	file_server
-# 	handle /api/chat* {
-# 		reverse_proxy 127.0.0.1:3000
-# 	}
-# }
