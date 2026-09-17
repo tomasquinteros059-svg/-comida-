@@ -36,6 +36,10 @@ WHATSAPP_APP_SECRET=la-clave-secreta-de-la-app \
 node qa/whatsapp-cargado.mjs
 ```
 
+`qa/whatsapp-avisos.mjs` es el circuito entero contra el contenedor: un cliente
+escribe, el bot toma el pedido, la cocina lo mueve y al cliente le llega el
+aviso. Necesita las credenciales puestas, igual que el anterior.
+
 ## Qué mira cada una, y por qué
 
 **`paridad-demo.mts`** — pide las 21 rutas que el panel pide de verdad a los
@@ -66,3 +70,9 @@ al contenedor**. `docker-compose.yml` no las listaba, y el `.env` solo sirve
 para completar valores dentro de ese archivo —no entra solo al contenedor—.
 El local podía cargar las cuatro credenciales bien, reiniciar, y el panel le
 seguía diciendo que faltaban las cuatro, sin manera de darse cuenta por qué.
+
+**`whatsapp-avisos.mjs`** — el circuito completo: el cuerpo crudo que firma
+Meta, el pedido que llega al panel, el aviso que sale de un cambio de estado
+hecho desde la cocina. El caso que más importa es el que comprueba que el
+pedido llega a "listo" **aunque Meta no conteste**: un aviso que no sale es una
+molestia, un pedido que no avanza es el local parado.

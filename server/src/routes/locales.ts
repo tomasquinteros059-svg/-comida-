@@ -50,7 +50,19 @@ localesRouter.patch(
   '/:slug',
   route((req) => {
     const body = z
-      .object({ nombre: z.string().min(2).max(80).optional(), hosts, activo: z.boolean().optional() })
+      .object({
+        nombre: z.string().min(2).max(80).optional(),
+        hosts,
+        activo: z.boolean().optional(),
+        // El identificador del numero de WhatsApp de este local. Son digitos y
+        // nada mas: si alguien pega el telefono en vez del identificador, que
+        // lo diga aca y no cuando llegue el primer mensaje.
+        whatsapp_id: z
+          .string()
+          .max(40)
+          .regex(/^[0-9]*$/, 'El identificador del número son solo dígitos')
+          .optional(),
+      })
       .parse(req.body ?? {});
 
     // Desactivar el principal dejaria la instalacion sin donde atender, y ahi

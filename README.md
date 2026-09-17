@@ -389,4 +389,8 @@ las comandas coherentes.
   algún día hay varios, se cambia por Redis y los emisores no se tocan.
 - Que el chatbot entienda audios de WhatsApp: hoy toma pedidos por texto y los
   audios se ignoran.
+- Plantillas de WhatsApp: Meta solo deja escribirle libremente a alguien dentro
+  de las 24 h de su último mensaje. Los avisos de un pedido caen siempre adentro
+  de esa ventana, pero para escribirle a un cliente al otro día haría falta una
+  plantilla aprobada.
 - Cobros con otros medios además de Mercado Pago.

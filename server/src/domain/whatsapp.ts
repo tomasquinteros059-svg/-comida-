@@ -101,6 +101,14 @@ export interface MensajeEntrante {
   de: string;
   texto: string;
   nombre: string;
+  /**
+   * El identificador del número DEL LOCAL que recibió el mensaje.
+   *
+   * Meta manda todos los webhooks a la misma dirección, así que con varios
+   * locales esto es lo único que dice a cuál va. Vacío en los webhooks viejos
+   * o armados a mano.
+   */
+  paraNumero: string;
 }
 
 /**
@@ -119,7 +127,10 @@ export function mensajesDelWebhook(cuerpo: unknown): MensajeEntrante[] {
       const valor = cambio.value as {
         messages?: Array<{ id?: string; from?: string; type?: string; text?: { body?: string } }>;
         contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
+        metadata?: { phone_number_id?: string };
       };
+
+      const paraNumero = valor?.metadata?.phone_number_id?.trim() ?? '';
 
       const nombres = new Map<string, string>();
       for (const contacto of valor?.contacts ?? []) {
@@ -137,6 +148,7 @@ export function mensajesDelWebhook(cuerpo: unknown): MensajeEntrante[] {
           de: mensaje.from,
           texto,
           nombre: nombres.get(mensaje.from) ?? '',
+          paraNumero,
         });
       }
     }
@@ -182,23 +194,101 @@ export async function enviarWhatsapp(a: string, texto: string): Promise<void> {
   if (!c.phoneNumberId || !c.token) throw new WhatsappError('WhatsApp no está configurado');
 
   for (const parte of partirTexto(texto, 4000)) {
-    const respuesta = await fetch(
-      `https://graph.facebook.com/${c.version}/${c.phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${c.token}` },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: a,
-          type: 'text',
-          text: { body: parte },
-        }),
-      },
+    await conReintentos(() =>
+      llamarAMeta(c, {
+        messaging_product: 'whatsapp',
+        to: a,
+        type: 'text',
+        text: { body: parte },
+      }),
     );
+  }
+}
 
-    if (!respuesta.ok) {
-      const detalle = await respuesta.text().catch(() => '');
-      throw new WhatsappError(`Meta rechazó el mensaje (${respuesta.status}): ${detalle.slice(0, 300)}`);
+/**
+ * El doble tilde azul.
+ *
+ * Cuesta una llamada y cambia bastante: el cliente ve que el local lo leyó
+ * mientras el bot piensa la respuesta, en vez de mirar un mensaje sin entregar
+ * y escribir "hola?" tres veces.
+ *
+ * Es lo primero que se sacrifica: si falla, no se reintenta ni se avisa.
+ */
+export async function marcarComoLeidoEnWhatsapp(mensajeId: string): Promise<void> {
+  const c = configWhatsapp();
+  if (!c.phoneNumberId || !c.token) return;
+  try {
+    await llamarAMeta(c, { messaging_product: 'whatsapp', status: 'read', message_id: mensajeId });
+  } catch {
+    // Un tilde que no se pone no es motivo para no contestar el mensaje.
+  }
+}
+
+/** Un POST a la API de mensajes. Tira `RespuestaDeMeta` si Meta no acepta. */
+async function llamarAMeta(c: ConfigWhatsapp, cuerpo: unknown): Promise<void> {
+  const respuesta = await fetch(
+    `https://graph.facebook.com/${c.version}/${c.phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${c.token}` },
+      body: JSON.stringify(cuerpo),
+    },
+  );
+
+  if (!respuesta.ok) {
+    const detalle = await respuesta.text().catch(() => '');
+    throw new RespuestaDeMeta(
+      respuesta.status,
+      Number(respuesta.headers.get('retry-after')) || 0,
+      `Meta rechazó el mensaje (${respuesta.status}): ${detalle.slice(0, 300)}`,
+    );
+  }
+}
+
+/** Un error de Meta que sabe si conviene volver a intentar. */
+class RespuestaDeMeta extends WhatsappError {
+  constructor(
+    readonly estado: number,
+    readonly esperarSegundos: number,
+    mensaje: string,
+  ) {
+    super(mensaje);
+  }
+
+  /**
+   * 429 es "aflojá un poco" y 5xx es "se me cayó algo": los dos se arreglan
+   * esperando. El resto de los 4xx son culpa nuestra —token vencido, número
+   * mal escrito, fuera de la ventana de 24 h— y reintentar solo repite el
+   * error más rápido.
+   */
+  get convieneReintentar(): boolean {
+    return this.estado === 429 || this.estado >= 500;
+  }
+}
+
+/**
+ * Reintenta lo que se arregla esperando.
+ *
+ * Sin esto, un 429 de Meta —que llega cuando el local se llena, o sea justo
+ * cuando importa— dejaba al cliente sin respuesta y sin que nadie se enterara.
+ *
+ * Tres intentos y se corta: si Meta sigue caído después de siete segundos, la
+ * espera ya es peor que el error, y del otro lado hay alguien mirando el
+ * teléfono.
+ */
+async function conReintentos(accion: () => Promise<void>, intentos = 3): Promise<void> {
+  for (let intento = 1; ; intento += 1) {
+    try {
+      await accion();
+      return;
+    } catch (err) {
+      const esperable = err instanceof RespuestaDeMeta && err.convieneReintentar;
+      if (!esperable || intento >= intentos) throw err;
+
+      // Si Meta dice cuánto esperar, se le hace caso; si no, 1 s y después 2 s.
+      const segundos = err.esperarSegundos || 2 ** (intento - 1);
+      console.error(`[whatsapp] Meta contestó ${err.estado}, reintento en ${segundos}s`);
+      await new Promise((listo) => setTimeout(listo, Math.min(segundos, 10) * 1000));
     }
   }
 }

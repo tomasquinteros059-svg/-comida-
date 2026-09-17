@@ -656,6 +656,11 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
         ],
       };
 
+    case 'GET /canales/avisos':
+      return { activo: true, demoraMin: 30 };
+    case 'PUT /canales/avisos':
+      return { activo: true, demoraMin: 30, ...(cuerpo as object) };
+
     // ── Caja ──
     case 'GET /cobros/estado':
       return {
@@ -707,7 +712,7 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
     case 'GET /usuarios/auditoria':
       return { ...pagina([], limite, desde), quienes: [] };
     case 'GET /locales':
-      return { locales: [{ slug: 'principal', nombre: datos.settings.nombre_local ?? 'Principal', hosts: [], activo: true, creado: ahora(), archivo: 'demo' }], actual: 'principal', varios: false };
+      return { locales: [{ slug: 'principal', nombre: datos.settings.nombre_local ?? 'Principal', hosts: [], whatsapp_id: '', activo: true, creado: ahora(), archivo: 'demo' }], actual: 'principal', varios: false };
   }
 
   // ── Rutas con id adentro ──

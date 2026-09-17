@@ -39,6 +39,9 @@ before(async () => {
         throw new Error('fetch a Meta sin respuesta preparada: ' + destino);
       }
       const cuerpo = JSON.parse(String(init?.body ?? '{}'));
+      // El doble tilde azul va por la misma ruta que un mensaje, pero no es
+      // uno: si se contara, cada respuesta parecerían dos.
+      if (cuerpo.status === 'read') return new Response('{}', { status: 200 });
       enviados.push({ a: cuerpo.to, texto: cuerpo.text?.body ?? '' });
       return new Response(JSON.stringify({ messages: [{ id: 'wamid.enviado' }] }), { status: 200 });
     }

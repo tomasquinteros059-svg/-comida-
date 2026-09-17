@@ -7,6 +7,7 @@ import { emit } from '../lib/events.js';
 import { assertProductOrderable, getModifiers } from './menu.js';
 import { checkAvailability, consumeForOrder, restoreForOrder, syncProductAvailability } from './stock.js';
 import type { CartLine, OrderStatus, PricedLine, ServiceType } from './types.js';
+import { enFila } from '../lib/cola.js';
 import { armarPagina, type OpcionesDePagina, type Pagina } from '../lib/paginacion.js';
 
 /** Transiciones validas del pedido. Cualquier otra combinacion es un error. */
@@ -422,7 +423,35 @@ export function advanceOrder(
   }
 
   emit('pedido', `${order.code} ${next}`);
+
+  // Avisarle al cliente que su pedido avanzó. Va después de emit y sin await:
+  // si Meta está caído, el pedido igual pasó a listo y la cocina sigue.
+  void avisarAlCliente(orderId, next, opts.note);
+
   return getOrderOrThrow(orderId);
+}
+
+/**
+ * El aviso por WhatsApp, colgado del cambio de estado.
+ *
+ * avisos.ts se carga a demanda por lo mismo que la comandera: necesita leer el
+ * pedido, y cargarlo arriba haría un círculo entre los dos.
+ *
+ * El `enFila` va AFUERA del import y no adentro: encolar es sincrónico, así
+ * que los avisos del mismo pedido salen en el orden en que se pidieron. Al
+ * revés —encolar después del `await import(...)`— el orden lo terminaría
+ * decidiendo cuál import resuelve primero, y el cliente podía recibir "ya está
+ * listo" antes que "tomamos tu pedido".
+ */
+function avisarAlCliente(orderId: string, estado: OrderStatus, motivo?: string): void {
+  void enFila(`aviso:${orderId}`, async () => {
+    try {
+      const { avisarCambioDeEstado } = await import('./avisos.js');
+      await avisarCambioDeEstado(orderId, estado, { motivo });
+    } catch (err) {
+      console.error('[avisos] error inesperado:', err);
+    }
+  });
 }
 
 /**

@@ -297,6 +297,43 @@ El webhook es la parte que no depende de las credenciales: Meta tiene que
 poder llegar al servidor desde afuera, por HTTPS y con certificado válido. Sin
 eso el local manda mensajes pero no recibe ninguno.
 
+#### Qué hace el bot por WhatsApp
+
+El mismo motor del chat: toma el pedido, arma el carrito, lo confirma y lo
+manda a la cocina. Además:
+
+- **Le avisa al cliente cómo va su pedido.** Cuando el local lo toma y cuando
+  está listo —y si lo cancelan, con el motivo—. "En preparación" no se avisa a
+  propósito: no le cambia nada al que espera. Se prende y se apaga en **Bot →
+  WhatsApp del local**, junto con la demora que se promete al confirmar.
+- **Marca los mensajes como leídos** mientras piensa la respuesta, así el
+  cliente no escribe "hola?" tres veces.
+- **No procesa dos veces el mismo mensaje.** Meta reintenta cuando no le
+  contestan rápido, y sin esto un reintento cocinaría el pedido dos veces.
+- **Reintenta cuando Meta se cae un rato.** Un 429 llega justo cuando el local
+  se llena; sin reintento la respuesta al cliente se perdía en silencio. Un
+  token vencido no se reintenta: eso no se arregla esperando.
+
+Nada de esto puede frenar la cocina: si Meta no contesta, el pedido igual pasa
+a listo y el aviso es lo único que se pierde.
+
+#### Varios locales, un solo webhook
+
+Meta manda los mensajes de **todos** los locales a la misma dirección, así que
+el ruteo por dominio —que es como entra todo lo demás al panel— no sirve: para
+Meta el Host es siempre el mismo.
+
+Lo único que distingue un local de otro es el número que recibió el mensaje.
+Por eso cada local lleva su `WHATSAPP_PHONE_NUMBER_ID` cargado en **Locales →
+Editar**. Con un solo local se puede dejar vacío y todo sigue igual.
+
+> Ese identificador va en la base y no en el `.env` porque **no es una
+> credencial**: es un dato público que Meta manda en cada webhook. El token,
+> que sí lo es, sigue afuera.
+
+Si llega un mensaje a un número que ningún local tiene cargado, se atiende en
+el principal y queda un aviso en el registro. Perder el mensaje sería peor.
+
 > Las credenciales van por variables de entorno y **no** en la base: la base se
 > respalda y esas copias terminan circulando. Un token adentro de un backup que
 > anda dando vueltas deja mandar mensajes en nombre del local.

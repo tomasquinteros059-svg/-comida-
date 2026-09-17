@@ -19,6 +19,7 @@ import { registrar } from './domain/users.js';
 import { describirPedido } from './lib/bitacora.js';
 import { usarMensajesEnCastellano } from './lib/errores-zod.js';
 import { purgarConversacionesViejas } from './domain/retencion.js';
+import { configDeAvisos, guardarConfigDeAvisos } from './domain/avisos.js';
 import { chatAdminRouter, chatPublicRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
 import { ordersRouter } from './routes/orders.js';
@@ -125,6 +126,16 @@ export function createApp() {
   // entre cuatro credenciales parecidas, y el error de Meta no dice cual falla.
   app.post('/api/canales/whatsapp/probar', requirePermiso('bot'), (_req, res, next) => {
     probarConexion().then((r) => res.json(r)).catch(next);
+  });
+  // Los avisos al cliente: que le llegue por WhatsApp cuando su pedido esta
+  // listo. Es del que maneja el bot, igual que el resto del canal.
+  app.get('/api/canales/avisos', requirePermiso('bot'), (_req, res) => res.json(configDeAvisos()));
+  app.put('/api/canales/avisos', requirePermiso('bot'), (req, res, next) => {
+    try {
+      res.json(guardarConfigDeAvisos(req.body ?? {}));
+    } catch (err) {
+      next(err);
+    }
   });
 
   // insightsRouter junta varias pantallas bajo /api, asi que el permiso se

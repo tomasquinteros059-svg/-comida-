@@ -25,6 +25,16 @@ export interface Local {
   nombre: string;
   /** Dominios que entran a este local. Vacío = solo por el slug. */
   hosts: string[];
+  /**
+   * El identificador del número de WhatsApp de este local (el
+   * `phone_number_id` de Meta).
+   *
+   * Va acá y no en las variables de entorno porque NO es una credencial: es
+   * un identificador público que Meta manda en cada webhook, y es lo único
+   * que dice a qué local pertenece un mensaje. El token, que sí es una
+   * credencial, sigue afuera de la base.
+   */
+  whatsapp_id: string;
   activo: boolean;
   creado: string;
 }
@@ -55,6 +65,13 @@ function abrirRegistro(): Database.Database {
       creado  TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+  // Se agrega aparte para no romper los registros que ya existen. Falla si la
+  // columna ya está, que es lo normal a partir de la segunda vez.
+  try {
+    handle.exec(`ALTER TABLE locales ADD COLUMN whatsapp_id TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // Ya estaba.
+  }
   registro = handle;
   return handle;
 }
@@ -64,10 +81,18 @@ export function cerrarRegistro(): void {
   registro = null;
 }
 
-const mapear = (fila: { slug: string; nombre: string; hosts: string; activo: number; creado: string }): Local => ({
+const mapear = (fila: {
+  slug: string;
+  nombre: string;
+  hosts: string;
+  whatsapp_id?: string;
+  activo: number;
+  creado: string;
+}): Local => ({
   slug: fila.slug,
   nombre: fila.nombre,
   hosts: JSON.parse(fila.hosts || '[]') as string[],
+  whatsapp_id: fila.whatsapp_id ?? '',
   activo: fila.activo === 1,
   creado: fila.creado,
 });
@@ -135,7 +160,10 @@ export function crearLocal(input: { nombre: string; slug?: string; hosts?: strin
   return obtenerLocal(slug)!;
 }
 
-export function actualizarLocal(slug: string, cambio: Partial<Pick<Local, 'nombre' | 'hosts' | 'activo'>>): Local {
+export function actualizarLocal(
+  slug: string,
+  cambio: Partial<Pick<Local, 'nombre' | 'hosts' | 'activo' | 'whatsapp_id'>>,
+): Local {
   const actual = obtenerLocal(slug);
   if (!actual) throw badRequest(`No existe el local "${slug}"`);
 
@@ -144,15 +172,41 @@ export function actualizarLocal(slug: string, cambio: Partial<Pick<Local, 'nombr
     if (duenio && duenio.slug !== slug) throw conflict(`"${host}" ya lleva al local "${duenio.nombre}"`);
   }
 
+  const whatsapp = cambio.whatsapp_id?.trim() ?? actual.whatsapp_id;
+  if (whatsapp) {
+    // Dos locales con el mismo número no se puede: los mensajes de uno
+    // caerían en la cocina del otro, y ese es el bug que esto viene a evitar.
+    const duenio = localPorWhatsapp(whatsapp);
+    if (duenio && duenio.slug !== slug) {
+      throw conflict(`Ese número de WhatsApp ya es del local "${duenio.nombre}"`);
+    }
+  }
+
   abrirRegistro()
-    .prepare('UPDATE locales SET nombre = ?, hosts = ?, activo = ? WHERE slug = ?')
+    .prepare('UPDATE locales SET nombre = ?, hosts = ?, activo = ?, whatsapp_id = ? WHERE slug = ?')
     .run(
       cambio.nombre?.trim() ?? actual.nombre,
       JSON.stringify(cambio.hosts ?? actual.hosts),
       (cambio.activo ?? actual.activo) ? 1 : 0,
+      whatsapp,
       slug,
     );
   return obtenerLocal(slug)!;
+}
+
+/**
+ * A qué local pertenece un número de WhatsApp.
+ *
+ * Meta manda todos los webhooks a la MISMA dirección, así que el dominio —que
+ * es como se rutea todo lo demás— no sirve: para Meta el Host es siempre el
+ * mismo. Lo único que distingue un local de otro en el cuerpo del webhook es
+ * el `phone_number_id`. Sin esto, con dos locales dados de alta, los pedidos
+ * de los dos caen en la cocina del primero.
+ */
+export function localPorWhatsapp(phoneNumberId: string): Local | undefined {
+  const limpio = phoneNumberId.trim();
+  if (!limpio) return undefined;
+  return listarLocales().find((l) => l.whatsapp_id === limpio);
 }
 
 /** A qué local lleva un dominio. */

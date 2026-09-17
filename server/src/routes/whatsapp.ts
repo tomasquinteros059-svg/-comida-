@@ -7,13 +7,16 @@ import {
   firmaValida,
   limpiarMensajesVistos,
   loQueFaltaDeWhatsapp,
+  marcarComoLeidoEnWhatsapp,
   marcarComoVisto,
   mensajesDelWebhook,
+  type MensajeEntrante,
   responderVerificacion,
   whatsappActivo,
   probarWhatsapp,
 } from '../domain/whatsapp.js';
 import { route } from '../lib/http.js';
+import { enLocal, hayVariosLocales, localPorWhatsapp } from '../db/locales.js';
 
 /**
  * El webhook de WhatsApp. Es publico por definicion —lo llama Meta— y por eso
@@ -61,14 +64,53 @@ whatsappRouter.post('/', (req, res) => {
   const mensajes = mensajesDelWebhook(req.body);
   res.status(200).json({ recibidos: mensajes.length });
 
-  for (const mensaje of mensajes) void atender(mensaje);
+  for (const mensaje of mensajes) void atenderEnSuLocal(mensaje);
 });
 
+/**
+ * Manda el mensaje a la cocina que corresponde.
+ *
+ * Meta pega SIEMPRE en la misma direccion, asi que el ruteo por dominio —que
+ * es como entra todo lo demas— no sirve: para Meta el Host es siempre el
+ * mismo. Lo unico que distingue un local de otro es el numero que recibio el
+ * mensaje, que viene en el cuerpo del webhook.
+ *
+ * Con un solo local no cambia nada. Con dos, sin esto, los pedidos de los dos
+ * caen en la cocina del primero.
+ */
+async function atenderEnSuLocal(mensaje: MensajeEntrante): Promise<void> {
+  const local = mensaje.paraNumero ? localPorWhatsapp(mensaje.paraNumero) : undefined;
+
+  if (!local) {
+    // Sin numero cargado no hay a quien mandarselo. Con un solo local eso es
+    // lo normal —nadie lo cargo porque no hacia falta— y va al de siempre.
+    if (hayVariosLocales() && mensaje.paraNumero) {
+      console.error(
+        `[whatsapp] llegó un mensaje al número ${mensaje.paraNumero} y ningún local lo tiene ` +
+          `cargado. Cargalo en Locales, o el pedido va a caer en la cocina equivocada.`,
+      );
+    }
+    return atender(mensaje);
+  }
+
+  // El contexto sobrevive a los `await` de adentro: AsyncLocalStorage lo
+  // propaga por la cadena de promesas, asi que todas las consultas de
+  // `atender` —incluidas las de despues de llamar al modelo— van a la base de
+  // ESTE local. Hay un test que lo comprueba contra dos bases de verdad, en
+  // whatsapp-locales.test.ts, porque de esto depende en que cocina cae el
+  // pedido y no es algo para dar por sentado.
+  return enLocal(local.slug, () => atender(mensaje));
+}
+
 /** Toma un mensaje, lo pasa por el bot y contesta por WhatsApp. */
-async function atender(mensaje: { id: string; de: string; texto: string; nombre: string }): Promise<void> {
+async function atender(mensaje: MensajeEntrante): Promise<void> {
   // Antes de procesar, no despues: si el bot tarda y Meta reintenta, el segundo
   // se descarta aca en vez de cocinar el pedido dos veces.
   if (!marcarComoVisto(mensaje.id)) return;
+
+  // El doble tilde azul, mientras el bot piensa. No se espera: si tarda o
+  // falla, no tiene por que demorar la respuesta.
+  void marcarComoLeidoEnWhatsapp(mensaje.id);
 
   try {
     const conversacion = conversacionDelNumero(mensaje.de, mensaje.nombre);

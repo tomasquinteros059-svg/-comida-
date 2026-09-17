@@ -355,3 +355,16 @@ CREATE TABLE IF NOT EXISTS pagos (
 );
 CREATE INDEX IF NOT EXISTS idx_pagos_order ON pagos(order_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_pagos_ref ON pagos(referencia);
+
+-- Los avisos que ya se le mandaron al cliente por WhatsApp.
+--
+-- La clave es (pedido, estado) a proposito: un pedido puede volver a "listo"
+-- si alguien lo movio de ida y de vuelta, y el cliente no tiene por que
+-- recibir dos veces "ya esta listo" —la segunda lo hace venir al mostrador a
+-- preguntar si hay dos pedidos—.
+CREATE TABLE IF NOT EXISTS avisos_mandados (
+  order_id   TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  estado     TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (order_id, estado)
+);

@@ -67,7 +67,12 @@ function Retencion() {
             onChange={(e) => setDias(e.target.value)}
           />
         </Field>
-        <button className="btn primary small" disabled={Number(valor) === actual} onClick={guardar}>
+        <button
+          className="btn primary small"
+          disabled={Number(valor) === actual}
+          onClick={guardar}
+          aria-label="Guardar el plazo de retención"
+        >
           Guardar
         </button>
         {data.a_borrar > 0 && (
@@ -213,7 +218,85 @@ function Whatsapp() {
       >
         <input className="input" readOnly value={direccion} onFocus={(e) => e.target.select()} />
       </Field>
+
+      <Avisos />
     </Card>
+  );
+}
+
+interface ConfigAvisos {
+  activo: boolean;
+  demoraMin: number;
+}
+
+/**
+ * Avisarle al cliente cómo va su pedido.
+ *
+ * Sin esto el bot toma el pedido y se calla: el cliente se queda mirando el
+ * teléfono y a los diez minutos llama al local para preguntar, que es
+ * justamente el teléfono que el bot venía a sacarse de encima.
+ */
+function Avisos() {
+  const { data, reload } = useApi<ConfigAvisos>('/canales/avisos');
+  const run = useAction();
+  const [demora, setDemora] = useState<string>('');
+
+  if (!data) return null;
+
+  const valor = demora === '' ? String(data.demoraMin) : demora;
+
+  const guardar = (cambio: Partial<ConfigAvisos>) =>
+    void run(async () => {
+      await api.put('/canales/avisos', cambio);
+      setDemora('');
+      await reload();
+    }, 'Listo');
+
+  return (
+    <div style={{ marginTop: 18, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <div>
+          <div className="strong">Avisarle al cliente cómo va su pedido</div>
+          <div className="small muted">
+            Cuando lo tomás y cuando está listo. Si lo cancelás, con el motivo.
+          </div>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <Switch
+            on={data.activo}
+            onChange={() => guardar({ activo: !data.activo })}
+            label="Avisarle al cliente por WhatsApp"
+          />
+        </div>
+      </div>
+
+      {data.activo && (
+        <div className="filtros">
+          <Field
+            label="Demora que se promete"
+            hint="Minutos. En 0 no promete ningún tiempo."
+          >
+            <input
+              id="avisos-demora"
+              className="input"
+              type="number"
+              min={0}
+              max={240}
+              value={valor}
+              onChange={(e) => setDemora(e.target.value)}
+            />
+          </Field>
+          <button
+            className="btn primary small"
+            disabled={Number(valor) === data.demoraMin}
+            onClick={() => guardar({ demoraMin: Number(valor) })}
+            aria-label="Guardar la demora que se promete"
+          >
+            Guardar
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

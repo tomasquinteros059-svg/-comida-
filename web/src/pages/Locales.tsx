@@ -8,6 +8,7 @@ interface Local {
   slug: string;
   nombre: string;
   hosts: string[];
+  whatsapp_id: string;
   activo: boolean;
   creado: string;
   archivo: string;
@@ -60,6 +61,9 @@ export function LocalesPage() {
                 </div>
                 <div className="usuario-alias">
                   {l.hosts.length ? l.hosts.join(', ') : 'sin dominio cargado'}
+                  {l.whatsapp_id
+                    ? ` · WhatsApp …${l.whatsapp_id.slice(-4)}`
+                    : ''}
                 </div>
               </div>
               {!l.activo && <Badge tone="danger">desactivado</Badge>}
@@ -127,6 +131,7 @@ function FormularioDeLocal({
   const ejecutar = useAction();
   const [nombre, setNombre] = useState(local?.nombre ?? '');
   const [hosts, setHosts] = useState((local?.hosts ?? []).join('\n'));
+  const [whatsapp, setWhatsapp] = useState(local?.whatsapp_id ?? '');
 
   const listaDeHosts = hosts
     .split(/[\n,]/)
@@ -145,7 +150,11 @@ function FormularioDeLocal({
             const ok = await ejecutar(
               () =>
                 local
-                  ? api.patch(`/locales/${local.slug}`, { nombre: nombre.trim(), hosts: listaDeHosts })
+                  ? api.patch(`/locales/${local.slug}`, {
+                      nombre: nombre.trim(),
+                      hosts: listaDeHosts,
+                      whatsapp_id: whatsapp.trim(),
+                    })
                   : api.post('/locales', { nombre: nombre.trim(), hosts: listaDeHosts }),
               local ? 'Guardado' : `${nombre.trim()} ya puede atender`,
             );
@@ -179,6 +188,26 @@ function FormularioDeLocal({
           placeholder={'laesquina.com.ar\npedidos.laesquina.com.ar'}
         />
       </Field>
+      {local && (
+        <Field
+          label="Número de WhatsApp de este local"
+          hint="El identificador del número (WHATSAPP_PHONE_NUMBER_ID), no el teléfono."
+        >
+          <input
+            id="local-whatsapp"
+            className="input"
+            inputMode="numeric"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value)}
+            placeholder="123456789012345"
+          />
+          <p className="small muted" style={{ marginTop: 6 }}>
+            Meta manda los mensajes de todos los locales a la misma dirección, así
+            que esto es lo único que dice a qué cocina va cada pedido. Con un solo
+            local se puede dejar vacío.
+          </p>
+        </Field>
+      )}
       {!local && (
         <p className="small muted">
           Se crea una base vacía: carta, insumos y usuarios propios. Vas a tener
