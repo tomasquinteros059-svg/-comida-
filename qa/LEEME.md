@@ -25,6 +25,30 @@ Las suites viven en `qa/suites/`. Van numeradas en el orden en que conviene
 leerlas: acceso, flujo operativo, claves, bitácora, canales, y las tres del
 navegador.
 
+## Antes de entregar una instalación
+
+`qa/validar-instalacion.mjs` no prueba el producto: prueba **esa instalación**.
+Se le apunta a cualquier comeIA y contesta si está lista para atender.
+
+```bash
+node qa/validar-instalacion.mjs https://pedidos.milocal.com.ar dueño clave
+ADMIN_TOKEN=xxx node qa/validar-instalacion.mjs http://127.0.0.1:3000
+```
+
+Cada control pesa distinto: **IMPIDE** (así no se abre el local), **ANTES**
+(abre, pero hay que arreglarlo antes de atender gente de verdad) y
+**CONVIENE**. Sale con código 1 si hay algo en IMPIDE, así que sirve en un
+despliegue automático.
+
+Existe porque dar de alta un local son quince cosas y trece se olvidan sin que
+nada avise. El control que lo justifica entero: **un producto sin receta se
+vende igual y no descuenta nada**, así que el stock miente y la alerta de
+reposición nunca salta. Ningún error lo dice; se descubre el sábado a la noche
+cuando falta la mozzarella. El validador lo nombra por su nombre.
+
+Sin usuario y clave revisa solo lo que se ve desde afuera, que también sirve:
+si el panel contesta sin sesión, eso ya es todo lo que hay que saber.
+
 ## Antes de conectar WhatsApp
 
 `qa/comprobar-webhook.mjs` no prueba el producto: prueba **tu instalación**,
