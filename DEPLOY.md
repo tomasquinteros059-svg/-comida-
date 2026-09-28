@@ -421,9 +421,26 @@ nada**, y es la mayoría de lo que pasa en un mostrador. Está en la pantalla
 **Caja**, junto con el cierre por medio de pago.
 
 Los links de Mercado Pago son para el que pide por el chat y paga antes de
-pasar a buscarlo: completá `MERCADOPAGO_ACCESS_TOKEN`,
-`MERCADOPAGO_WEBHOOK_SECRET` y `PUBLIC_URL`, y cargá
-`https://tu-dominio/api/cobros/webhook` como URL de notificaciones.
+pasar a buscarlo. Se conectan desde **Caja → Links de pago**, igual que
+WhatsApp: se pegan los tres datos ahí mismo y **Guardar y probar** comprueba
+la conexión de una.
+
+| Qué | Dónde está en Mercado Pago |
+|---|---|
+| Access Token | Tus integraciones → tu aplicación → Credenciales. **El de producción**, no el de prueba |
+| Clave del webhook | En la pantalla de Webhooks, al crear la notificación |
+| Dirección pública | La del local, con https. Es adonde vuelve el cliente después de pagar |
+
+El error más caro de todos es pegar el token de **prueba**: todo parece andar
+—se genera el link, el cliente "paga"— y la plata no entra nunca. El botón de
+probar te dice de qué cuenta es el token.
+
+Después, en *Tus integraciones → Webhooks*, cargá
+`https://tu-dominio/api/cobros/webhook` con el evento **Pagos**.
+
+Igual que con WhatsApp: se guardan cifradas, y el `.env`
+(`MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `PUBLIC_URL`) le
+gana a lo cargado desde el panel.
 
 ### La comandera de la cocina
 

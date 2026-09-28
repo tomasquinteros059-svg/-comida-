@@ -138,6 +138,12 @@ legible en la base** —se respalda todas las noches y esas copias circulan—,
 que el panel nunca devuelva lo que guardó, y que una variable de entorno le
 siga ganando a lo cargado desde el panel.
 
+**`cobros-desde-el-panel.mjs`** — conectar Mercado Pago sin tocar el servidor,
+y el puente que faltaba: que desde **Chatbot** se pueda llegar a conectar
+WhatsApp. Los dos salieron de lo mismo —alguien parado en una pantalla que no
+tiene cómo conectar lo que esa pantalla hace—. El caso que más importa es el
+mismo de siempre: que el token de Mercado Pago no quede legible en la base.
+
 **`whatsapp-avisos.mjs`** — el circuito completo: el cuerpo crudo que firma
 Meta, el pedido que llega al panel, el aviso que sale de un cambio de estado
 hecho desde la cocina. El caso que más importa es el que comprueba que el

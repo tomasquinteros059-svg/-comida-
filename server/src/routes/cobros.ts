@@ -3,18 +3,23 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { route } from '../lib/http.js';
 import {
+  CREDENCIALES_MP,
   MEDIOS,
   configMercadoPago,
   crearLinkDePago,
   desmarcarPagado,
+  guardarCredencialesMP,
   loQueFaltaDeMercadoPago,
   marcarPagado,
   mercadoPagoActivo,
+  origenDeCredencialesMP,
   pagosDe,
+  probarMercadoPago,
   procesarAviso,
   resumenDeCaja,
   sinCobrar,
 } from '../domain/cobros.js';
+import { sePuedeGuardar } from '../domain/secretos.js';
 
 /** Lo que usa el local desde el panel. Va detras del guard de permisos. */
 export const cobrosRouter = Router();
@@ -27,10 +32,43 @@ export const cobrosWebhookRouter = Router();
 cobrosRouter.get(
   '/estado',
   route(() => ({
-    mercadopago: { activo: mercadoPagoActivo(), falta: loQueFaltaDeMercadoPago() },
+    mercadopago: {
+      activo: mercadoPagoActivo(),
+      falta: loQueFaltaDeMercadoPago(),
+      // De donde sale cada dato. El panel lo usa para no volver a pedir lo que
+      // ya esta, y para no dejar editar lo que manda el servidor.
+      origen: origenDeCredencialesMP(),
+      se_puede_cargar: sePuedeGuardar(),
+    },
     medios: MEDIOS,
   })),
 );
+
+/** Cargar las credenciales desde el panel. Se guardan cifradas. */
+cobrosRouter.put(
+  '/credenciales',
+  route((req) => {
+    const entrada = (req.body ?? {}) as Record<string, unknown>;
+    const limpio: Record<string, string> = {};
+    for (const { campo } of CREDENCIALES_MP) {
+      const valor = entrada[campo];
+      if (typeof valor === 'string') limpio[campo] = valor;
+    }
+    guardarCredencialesMP(limpio);
+    return {
+      mercadopago: {
+        activo: mercadoPagoActivo(),
+        falta: loQueFaltaDeMercadoPago(),
+        origen: origenDeCredencialesMP(),
+        se_puede_cargar: sePuedeGuardar(),
+      },
+      medios: MEDIOS,
+    };
+  }),
+);
+
+/** Revisa la conexion y dice que falta, paso por paso. */
+cobrosRouter.post('/probar', route(() => probarMercadoPago()));
 
 /** Lo que falta cobrar hoy: la pregunta del cierre de caja. */
 cobrosRouter.get('/pendientes', route(() => sinCobrar()));

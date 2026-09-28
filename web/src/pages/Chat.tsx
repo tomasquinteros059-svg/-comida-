@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/useApi';
+import { usePermiso } from '../lib/sesionContext';
 import { useAction, useToast } from '../lib/toast';
 import type { ChatTurn, Pagina } from '../lib/types';
 import { Badge, Card, Empty, Spinner } from '../components/ui';
@@ -93,6 +94,7 @@ export function ChatPage() {
   return (
     <div className="chat-shell">
       <div className="stack">
+        <DondeAtiende />
         <Card
           title="Probar el chatbot"
           action={
@@ -235,5 +237,47 @@ function Conversations() {
         ))}
       </div>
     </Card>
+  );
+}
+
+/**
+ * Dónde atiende este bot, de verdad.
+ *
+ * Esta pantalla es una consola de prueba: se escribe como si fueras un cliente
+ * y el bot contesta. Pero el cliente de verdad no entra por acá, entra por
+ * WhatsApp —y desde esta pantalla, que se llama "Chatbot", no había ninguna
+ * forma de llegar a conectarlo—. Quien busca "conectar el bot" lo busca acá,
+ * no en "Entrenar al bot".
+ */
+function DondeAtiende() {
+  const { data } = useApi<{ activo: boolean; falta: string[] }>('/canales/whatsapp');
+  const puedeConectar = usePermiso('bot');
+
+  if (!data) return null;
+
+  if (data.activo) {
+    return (
+      <div className="banner ok">
+        <span>
+          <strong>WhatsApp está conectado.</strong> Lo de acá abajo es una consola de
+          prueba: los clientes le escriben al WhatsApp del local y este mismo bot les
+          contesta.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="banner info" style={{ flexDirection: 'column', gap: 6 }}>
+      <span>
+        <strong>Esto es una consola de prueba.</strong> Los clientes todavía no le
+        pueden escribir: para eso hay que conectar el WhatsApp del local.
+      </span>
+      {puedeConectar ? (
+        <a className="btn small" href="#/bot">Conectar WhatsApp →</a>
+      ) : (
+        <span className="small">Lo conecta el dueño, desde Entrenar al bot.</span>
+      )}
+    </div>
   );
 }

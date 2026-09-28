@@ -3,6 +3,7 @@ import { newId } from '../lib/ids.js';
 import { badRequest, notFound } from '../lib/http.js';
 import { emit } from '../lib/events.js';
 import { getOrderOrThrow } from './orders.js';
+import { guardarSecreto, hayGuardado, leerSecreto, sePuedeGuardar } from './secretos.js';
 
 /**
  * Cobros.
@@ -43,16 +44,27 @@ export interface Pago {
 // ── Configuración ───────────────────────────────────────────────────────────
 
 /**
- * Las credenciales van por entorno y no en la base: la base se respalda y esas
- * copias circulan. Un token de Mercado Pago dentro de un backup deja cobrar en
- * nombre del local.
+ * De dónde salen las credenciales.
+ *
+ * Primero la variable de entorno y después la base, igual que WhatsApp. Ese
+ * orden importa: el que administra el servidor tiene la última palabra, y una
+ * instalación que ya andaba con el .env sigue andando sin tocar nada.
+ *
+ * Lo que está en la base está CIFRADO con una clave que no está en la base
+ * (ver secretos.ts). La razón por la que no van en claro sigue en pie: la base
+ * se respalda todas las noches y esas copias terminan circulando, y un token
+ * de Mercado Pago legible adentro de una copia perdida deja cobrar en nombre
+ * del local.
  */
+const credencial = (variable: string, guardada: string): string =>
+  process.env[variable]?.trim() || leerSecreto(guardada);
+
 export const configMercadoPago = () => ({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN?.trim() ?? '',
+  accessToken: credencial('MERCADOPAGO_ACCESS_TOKEN', 'mercadopago.access_token'),
   /** Con esto se verifica que el aviso lo mandó Mercado Pago y no cualquiera. */
-  webhookSecret: process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim() ?? '',
+  webhookSecret: credencial('MERCADOPAGO_WEBHOOK_SECRET', 'mercadopago.webhook_secret'),
   /** A dónde vuelve el cliente después de pagar. */
-  urlBase: process.env.PUBLIC_URL?.trim() ?? '',
+  urlBase: credencial('PUBLIC_URL', 'cobros.public_url'),
 });
 
 export const mercadoPagoActivo = (): boolean => configMercadoPago().accessToken.length > 0;
@@ -60,10 +72,136 @@ export const mercadoPagoActivo = (): boolean => configMercadoPago().accessToken.
 export function loQueFaltaDeMercadoPago(): string[] {
   const c = configMercadoPago();
   const falta: string[] = [];
-  if (!c.accessToken) falta.push('el token de Mercado Pago (MERCADOPAGO_ACCESS_TOKEN)');
-  if (!c.webhookSecret) falta.push('la clave del webhook (MERCADOPAGO_WEBHOOK_SECRET)');
-  if (!c.urlBase) falta.push('la dirección pública del local (PUBLIC_URL)');
+  if (!c.accessToken) falta.push('el token de Mercado Pago');
+  if (!c.webhookSecret) falta.push('la clave del webhook');
+  if (!c.urlBase) falta.push('la dirección pública del local');
   return falta;
+}
+
+/** Los tres datos, para guardarlos y para decir de dónde sale cada uno. */
+export const CREDENCIALES_MP = [
+  { campo: 'accessToken', variable: 'MERCADOPAGO_ACCESS_TOKEN', guardada: 'mercadopago.access_token' },
+  { campo: 'webhookSecret', variable: 'MERCADOPAGO_WEBHOOK_SECRET', guardada: 'mercadopago.webhook_secret' },
+  { campo: 'urlBase', variable: 'PUBLIC_URL', guardada: 'cobros.public_url' },
+] as const;
+
+/** Guarda lo que cargaron en el panel. Solo lo que viene; vacío borra. */
+export function guardarCredencialesMP(input: Partial<Record<string, string>>): void {
+  if (!sePuedeGuardar()) {
+    throw badRequest(
+      'Falta ADMIN_TOKEN en el servidor: sin eso no hay con qué cifrar las credenciales',
+    );
+  }
+  for (const { campo, guardada } of CREDENCIALES_MP) {
+    const valor = input[campo];
+    if (valor !== undefined) guardarSecreto(guardada, valor);
+  }
+}
+
+/** De dónde salió cada una. Nunca devuelve el valor. */
+export function origenDeCredencialesMP(): Record<string, 'entorno' | 'panel' | 'falta'> {
+  const salida: Record<string, 'entorno' | 'panel' | 'falta'> = {};
+  for (const { campo, variable, guardada } of CREDENCIALES_MP) {
+    if (process.env[variable]?.trim()) salida[campo] = 'entorno';
+    else if (hayGuardado(guardada)) salida[campo] = 'panel';
+    else salida[campo] = 'falta';
+  }
+  return salida;
+}
+
+export interface PasoDeCobros {
+  paso: string;
+  ok: boolean;
+  detalle: string;
+  arreglo?: string;
+}
+
+/**
+ * Revisa la conexión con Mercado Pago y dice qué falta, paso por paso.
+ *
+ * Igual que con WhatsApp: son tres datos que se parecen —un token, una clave
+ * de webhook y una dirección— y cuando uno está mal el error de Mercado Pago
+ * no dice cuál.
+ */
+export async function probarMercadoPago(): Promise<{ listo: boolean; pasos: PasoDeCobros[] }> {
+  const c = configMercadoPago();
+  const pasos: PasoDeCobros[] = [];
+
+  const falta = loQueFaltaDeMercadoPago();
+  pasos.push({
+    paso: 'Los datos están cargados',
+    ok: falta.length === 0,
+    detalle: falta.length ? `Falta ${falta.join(', ')}` : 'Los tres están',
+    arreglo: falta.length ? 'Cargalos acá abajo, o en el .env del servidor.' : undefined,
+  });
+  if (falta.length) return { listo: false, pasos };
+
+  // La dirección tiene que ser pública y con HTTPS: es a donde Mercado Pago
+  // manda el aviso y a donde vuelve el cliente después de pagar.
+  const publica = /^https:\/\//.test(c.urlBase) && !/localhost|127\.0\.0\.1/.test(c.urlBase);
+  pasos.push({
+    paso: 'La dirección del local sirve',
+    ok: publica,
+    detalle: publica ? c.urlBase : `"${c.urlBase}" no sirve para recibir el aviso`,
+    arreglo: publica
+      ? undefined
+      : 'Tiene que ser https y llegar desde afuera. Con localhost, el cliente ' +
+        'paga y el local nunca se entera.',
+  });
+
+  // Que el token sea de verdad: se le pregunta a Mercado Pago quién es.
+  try {
+    const res = await fetch('https://api.mercadopago.com/users/me', {
+      headers: { authorization: `Bearer ${c.accessToken}` },
+    });
+    const cuerpo = (await res.json().catch(() => ({}))) as {
+      nickname?: string;
+      site_id?: string;
+      message?: string;
+    };
+
+    if (res.ok) {
+      pasos.push({
+        paso: 'Mercado Pago reconoce el token',
+        ok: true,
+        detalle: `${cuerpo.nickname ?? 'cuenta sin nombre'}${cuerpo.site_id ? ` · ${cuerpo.site_id}` : ''}`,
+      });
+    } else if (res.status === 401) {
+      pasos.push({
+        paso: 'Mercado Pago reconoce el token',
+        ok: false,
+        detalle: 'El token no sirve',
+        arreglo:
+          'Fijate que sea el Access Token de PRODUCCIÓN y no el de prueba, y que ' +
+          'sea de la cuenta del local. Está en Tus integraciones → tu aplicación → ' +
+          'Credenciales.',
+      });
+    } else {
+      pasos.push({
+        paso: 'Mercado Pago reconoce el token',
+        ok: false,
+        detalle: cuerpo.message ?? `Mercado Pago contestó ${res.status}`,
+      });
+    }
+  } catch (err) {
+    pasos.push({
+      paso: 'Mercado Pago reconoce el token',
+      ok: false,
+      detalle: err instanceof Error ? err.message : 'No se pudo llegar a Mercado Pago',
+      arreglo: 'El servidor tiene que poder salir a api.mercadopago.com.',
+    });
+  }
+
+  pasos.push({
+    paso: 'El aviso de pago está dado de alta',
+    ok: true,
+    detalle: 'Esto lo comprueba Mercado Pago cuando le llega el primer pago',
+    arreglo:
+      `En Tus integraciones → Webhooks, poné ${c.urlBase}/api/cobros/webhook ` +
+      'y elegí el evento "Pagos".',
+  });
+
+  return { listo: pasos.every((p) => p.ok), pasos };
 }
 
 // ── Cobro a mano ────────────────────────────────────────────────────────────

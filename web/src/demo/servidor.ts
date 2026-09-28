@@ -667,8 +667,24 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
     // ── Caja ──
     case 'GET /cobros/estado':
       return {
-        mercadopago: { activo: false, falta: ['la configuración de Mercado Pago (esto es una demo)'] },
+        mercadopago: {
+          activo: false,
+          falta: ['la configuración de Mercado Pago (esto es una demo)'],
+          origen: { accessToken: 'falta', webhookSecret: 'falta', urlBase: 'falta' },
+          // En la demo no hay dónde guardarlas: corre entera en el navegador.
+          se_puede_cargar: false,
+        },
         medios: ['efectivo', 'debito', 'credito', 'transferencia', 'mercadopago', 'otro'],
+      };
+    case 'POST /cobros/probar':
+      return {
+        listo: false,
+        pasos: [{
+          paso: 'Los datos están cargados',
+          ok: false,
+          detalle: 'Esto es la demo: corre entera adentro del navegador',
+          arreglo: 'Los links de pago necesitan el servidor instalado.',
+        }],
       };
     case 'GET /cobros/pendientes': {
       const pendientes = estado.pedidos.filter(
