@@ -659,6 +659,24 @@ export async function responderDemo(metodo: string, ruta: string, cuerpo?: unkno
         ],
       };
 
+    case 'GET /canales/motor':
+      return {
+        usando: 'ninguno',
+        modelo: '',
+        origen: { gemini: 'falta', anthropic: 'falta' },
+        // En la demo no hay dónde guardarla: corre entera en el navegador.
+        se_puede_cargar: false,
+      };
+    case 'POST /canales/motor/probar':
+      return {
+        listo: false,
+        pasos: [{
+          paso: 'Hay una clave cargada',
+          ok: false,
+          detalle: 'Esto es la demo: el bot contesta con el motor determinista',
+          arreglo: 'Con el servidor instalado se carga una clave y entiende de verdad.',
+        }],
+      };
     case 'GET /canales/avisos':
       return { activo: true, demoraMin: 30 };
     case 'PUT /canales/avisos':

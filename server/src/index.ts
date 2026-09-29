@@ -20,6 +20,7 @@ import { describirPedido } from './lib/bitacora.js';
 import { usarMensajesEnCastellano } from './lib/errores-zod.js';
 import { purgarConversacionesViejas } from './domain/retencion.js';
 import { configDeAvisos, guardarConfigDeAvisos } from './domain/avisos.js';
+import { estadoDelMotor, guardarClavesDelMotor, probarElMotor } from './routes/motor.js';
 import { chatAdminRouter, chatPublicRouter } from './routes/chat.js';
 import { menuRouter } from './routes/menu.js';
 import { ordersRouter } from './routes/orders.js';
@@ -135,6 +136,19 @@ export function createApp() {
     } catch (err) {
       next(err);
     }
+  });
+  // El motor del bot: que clave usa para entender los pedidos. Se carga desde
+  // el panel, cifrada, igual que las demas.
+  app.get('/api/canales/motor', requirePermiso('bot'), (_req, res) => res.json(estadoDelMotor()));
+  app.put('/api/canales/motor', requirePermiso('bot'), (req, res, next) => {
+    try {
+      res.json(guardarClavesDelMotor(req.body));
+    } catch (err) {
+      next(err);
+    }
+  });
+  app.post('/api/canales/motor/probar', requirePermiso('bot'), (_req, res, next) => {
+    probarElMotor().then((r) => res.json(r)).catch(next);
   });
   // Los avisos al cliente: que le llegue por WhatsApp cuando su pedido esta
   // listo. Es del que maneja el bot, igual que el resto del canal.

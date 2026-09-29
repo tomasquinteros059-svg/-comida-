@@ -1,9 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { config, hasLLM } from '../config.js';
+import { claveDeChat, config, hasLLM, proveedorDeChat } from '../config.js';
 import { addMessage, getConversationOrThrow, getMessages } from '../domain/conversations.js';
 import { buildSystemPrompt } from './prompt.js';
 import { respondDeterministic } from './fallback.js';
 import { TOOLS, runTool } from './tools.js';
+import { responderConGemini } from './gemini.js';
 
 export interface ChatTurn {
   conversation_id: string;
@@ -26,14 +27,26 @@ const HISTORY_LIMIT = 20;
 const MAX_TOKENS = 2048;
 
 let client: Anthropic | null = null;
-const anthropic = () => (client ??= new Anthropic({ apiKey: config.anthropicApiKey }));
+let claveDelCliente = '';
+/**
+ * El cliente se rehace si cambió la clave: ahora se puede cargar desde el
+ * panel, y guardarla no tiene por qué obligar a reiniciar el servidor.
+ */
+const anthropic = () => {
+  const clave = claveDeChat('anthropic');
+  if (!client || claveDelCliente !== clave) {
+    client = new Anthropic({ apiKey: clave });
+    claveDelCliente = clave;
+  }
+  return client;
+};
 
 export async function chat(conversationId: string, userMessage: string): Promise<ChatTurn> {
   getConversationOrThrow(conversationId);
   addMessage({ conversation_id: conversationId, role: 'user', content: userMessage });
 
   const result = hasLLM()
-    ? await respondWithLLM(conversationId)
+    ? await conModelo(conversationId)
     : respondDeterministic(userMessage, conversationId);
 
   const stored = addMessage({
@@ -72,6 +85,47 @@ function logCacheUsage(usage: Anthropic.Usage): void {
   console.log(
     `[chat] tokens: ${fresh} sin cache · ${written} escritos al cache · ${read} leidos del cache · ${usage.output_tokens} de salida`,
   );
+}
+
+/**
+ * Manda el turno al proveedor configurado.
+ *
+ * Los dos caminos terminan igual —texto y traza— así que de acá para arriba
+ * nadie se entera de cuál contestó. Si el modelo falla, los dos caen al motor
+ * determinista: un bot que no contesta es peor que uno que contesta con
+ * reglas.
+ */
+async function conModelo(conversationId: string): Promise<EngineResult> {
+  if (proveedorDeChat() === 'gemini') return conGemini(conversationId);
+  return respondWithLLM(conversationId);
+}
+
+async function conGemini(conversationId: string): Promise<EngineResult> {
+  const trace: EngineResult['trace'] = [];
+  try {
+    const prompt = buildSystemPrompt(conversationId);
+    const resultado = await responderConGemini({
+      // Gemini no tiene el corte de cache de Anthropic, así que las dos partes
+      // del prompt van juntas. El contenido es el mismo.
+      sistema: `${prompt.stable}
+
+${prompt.volatile}`,
+      historia: getMessages(conversationId, HISTORY_LIMIT).map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      herramientas: TOOLS,
+      correr: (nombre, entrada) => runTool(nombre, entrada, { conversationId }),
+      maxRondas: MAX_TOOL_ROUNDS,
+      maxTokens: MAX_TOKENS,
+    });
+    return { reply: resultado.reply, trace: resultado.trace };
+  } catch (err) {
+    console.error('[chat] falló Gemini, uso el motor determinista:', err);
+    const last = getMessages(conversationId, 1000).filter((m) => m.role === 'user').at(-1);
+    const fallback = respondDeterministic(last?.content ?? '', conversationId);
+    return { reply: fallback.reply, trace: [...trace, ...fallback.trace] };
+  }
 }
 
 async function respondWithLLM(conversationId: string): Promise<EngineResult> {

@@ -144,6 +144,13 @@ WhatsApp. Los dos salieron de lo mismo —alguien parado en una pantalla que no
 tiene cómo conectar lo que esa pantalla hace—. El caso que más importa es el
 mismo de siempre: que el token de Mercado Pago no quede legible en la base.
 
+**`motor-desde-el-panel.mjs`** — con qué entiende el bot. Es lo primero que hay
+que conectar y lo último que estuvo: sin modelo el bot entiende con reglas, y
+WhatsApp conectado solo hace que más gente lo vea no entender. Comprueba que el
+panel lo diga con un ejemplo concreto —"se pierde con *sacale la cebolla a dos
+de las cuatro*"—, que al guardar la clave el servidor deje de estar en modo
+determinista, y lo de siempre: que la clave no quede legible en la base.
+
 **`whatsapp-avisos.mjs`** — el circuito completo: el cuerpo crudo que firma
 Meta, el pedido que llega al panel, el aviso que sale de un cambio de estado
 hecho desde la cocina. El caso que más importa es el que comprueba que el

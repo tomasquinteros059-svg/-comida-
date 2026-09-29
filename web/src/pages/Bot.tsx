@@ -475,6 +475,8 @@ export function BotPage() {
         no hace falta escribirlos: el bot los lee directo de la base.
       </div>
 
+      <Motor />
+
       <Whatsapp />
 
       <Card
@@ -655,5 +657,161 @@ function KnowledgeEditor({
         </Field>
       </div>
     </Modal>
+  );
+}
+
+type OrigenClave = 'entorno' | 'panel' | 'falta';
+
+interface EstadoDelMotor {
+  usando: 'anthropic' | 'gemini' | 'ninguno';
+  modelo: string;
+  origen: Record<string, OrigenClave>;
+  se_puede_cargar: boolean;
+}
+
+const PROVEEDORES = [
+  {
+    campo: 'gemini',
+    etiqueta: 'Gemini (Google)',
+    ayuda: 'La clave se saca gratis en aistudio.google.com. Empieza con AIza.',
+  },
+  {
+    campo: 'anthropic',
+    etiqueta: 'Claude (Anthropic)',
+    ayuda: 'En console.anthropic.com. Empieza con sk-ant-.',
+  },
+] as const;
+
+/**
+ * Con qué entiende el bot los pedidos.
+ *
+ * Sin clave contesta el motor determinista: entiende con reglas y coincidencia
+ * difusa, que alcanza para "quiero 6 empanadas" y se pierde con "sacale la
+ * cebolla a dos de las cuatro". Es lo primero que hay que conectar, porque de
+ * esto depende que el bot sirva: sin modelo, WhatsApp conectado solo hace que
+ * más gente vea al bot no entender.
+ */
+function Motor() {
+  const { data, reload } = useApi<EstadoDelMotor>('/canales/motor');
+  const run = useAction();
+  const { notify } = useToast();
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [editando, setEditando] = useState(false);
+  const [pasos, setPasos] = useState<Diagnostico[] | null>(null);
+
+  if (!data) return null;
+
+  const conectado = data.usando !== 'ninguno';
+
+  const guardar = () =>
+    void run(async () => {
+      await api.put('/canales/motor', valores);
+      setValores({});
+      setEditando(false);
+      await reload();
+      const r = await api.post<{ listo: boolean; pasos: Diagnostico[] }>('/canales/motor/probar');
+      setPasos(r.pasos);
+      notify(r.listo ? 'El bot ya entiende de verdad' : 'Guardado. Mirá los pasos', r.listo ? 'ok' : 'info');
+    });
+
+  const probar = () =>
+    void run(async () => {
+      const r = await api.post<{ listo: boolean; pasos: Diagnostico[] }>('/canales/motor/probar');
+      setPasos(r.pasos);
+      notify(r.listo ? 'El motor contesta bien' : 'Falta algo: mirá los pasos', r.listo ? 'ok' : 'info');
+    });
+
+  return (
+    <Card
+      title="Con qué entiende el bot"
+      action={
+        conectado ? <button className="btn small" onClick={probar}>Probar</button> : undefined
+      }
+    >
+      {conectado ? (
+        <p className="small muted" style={{ marginBottom: 12 }}>
+          Está usando <strong>{data.usando === 'gemini' ? 'Gemini' : 'Claude'}</strong>
+          {data.modelo ? ` · ${data.modelo}` : ''}. Entiende pedidos enredados, cambios
+          y preguntas sueltas.
+        </p>
+      ) : (
+        <div className="banner warn" style={{ flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          <span><strong>El bot está en modo básico.</strong> Entiende con reglas, no con un modelo.</span>
+          <span className="small">
+            Toma bien "quiero 6 empanadas de carne" y se pierde con "sacale la cebolla
+            a dos de las cuatro". Cargá una clave acá abajo y entiende de verdad.
+          </span>
+        </div>
+      )}
+
+      {pasos && (
+        <div className="stack tight" style={{ marginBottom: 12 }}>
+          {pasos.map((p) => (
+            <div key={p.paso} className={`banner ${p.ok ? 'ok' : 'warn'}`} style={{ flexDirection: 'column', gap: 4 }}>
+              <span>{p.ok ? '✓' : '✗'} <strong>{p.paso}</strong> · {p.detalle}</span>
+              {p.arreglo && <span className="small">{p.arreglo}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(editando || !conectado) && data.se_puede_cargar && (
+        <div className="stack">
+          <p className="small muted">
+            Con una alcanza. Si cargás las dos, se usa Claude.
+          </p>
+          {PROVEEDORES.map((prov) => {
+            const origen = data.origen?.[prov.campo] ?? 'falta';
+            const delServidor = origen === 'entorno';
+            return (
+              <Field
+                key={prov.campo}
+                label={
+                  `${prov.etiqueta}${origen === 'panel' ? ' · ya cargada' : ''}` +
+                  (delServidor ? ' · la pone el servidor' : '')
+                }
+                hint={delServidor ? 'Viene del .env: desde acá no se puede cambiar.' : prov.ayuda}
+              >
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="off"
+                  disabled={delServidor}
+                  value={valores[prov.campo] ?? ''}
+                  placeholder={origen === 'panel' ? '•••••••• (dejalo vacío para no cambiarla)' : ''}
+                  onChange={(e) => setValores((v) => ({ ...v, [prov.campo]: e.target.value }))}
+                />
+              </Field>
+            );
+          })}
+
+          <div className="row tight">
+            <button
+              className="btn primary small"
+              disabled={Object.values(valores).every((v) => !v?.trim())}
+              onClick={guardar}
+            >
+              Guardar y probar
+            </button>
+            {editando && (
+              <button className="btn ghost small" onClick={() => { setValores({}); setEditando(false); }}>
+                Cancelar
+              </button>
+            )}
+          </div>
+
+          <p className="small muted">
+            Se guarda cifrada, igual que las demás: una copia de respaldo perdida no
+            alcanza para gastar con tu cuenta.
+          </p>
+        </div>
+      )}
+
+      {conectado && !editando && (
+        <button className="btn ghost small" onClick={() => setEditando(true)}>
+          Cambiar la clave
+        </button>
+      )}
+    </Card>
   );
 }

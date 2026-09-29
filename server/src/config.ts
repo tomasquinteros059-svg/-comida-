@@ -38,6 +38,20 @@ export const config = {
   projectRoot,
   databasePath: resolveFromRoot(process.env.DATABASE_PATH?.trim() || './data/comeia.db'),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || '',
+  /**
+   * Gemini, como alternativa a Anthropic para el motor del chat.
+   *
+   * Los dos hacen lo mismo acá: entienden el pedido y llaman a las mismas
+   * herramientas. Se elige uno y el resto del sistema no se entera.
+   */
+  geminiApiKey: process.env.GEMINI_API_KEY?.trim() || '',
+  geminiModel: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+  /**
+   * Cuál se usa: 'auto' toma el que tenga clave. Con las dos puestas gana
+   * Anthropic, para que una instalación que ya andaba no cambie de motor
+   * porque alguien cargó una clave de Gemini.
+   */
+  chatProvider: (process.env.CHAT_PROVIDER?.trim() || 'auto') as 'auto' | 'anthropic' | 'gemini',
   chatModel: process.env.CHAT_MODEL?.trim() || 'claude-opus-5',
   /**
    * Cuanto "piensa" el modelo antes de responder. Tomar un pedido es una tarea
@@ -78,7 +92,50 @@ export const config = {
 };
 
 /** Si no hay clave, el chatbot usa el motor determinista (reglas + fuzzy match). */
-export const hasLLM = () => config.anthropicApiKey.length > 0;
+/**
+ * Qué motor contesta los mensajes.
+ *
+ * Se lee de las CLAVES y no de un ajuste aparte: una clave cargada es la
+ * intención de usar ese proveedor, y un ajuste que dice "gemini" sin clave
+ * solo sirve para que el bot se caiga al determinista sin decir por qué.
+ *
+ * Las claves pueden venir del entorno o del panel (cifradas), así que esto se
+ * calcula en cada llamada y no una sola vez al arrancar.
+ */
+export function proveedorDeChat(): 'anthropic' | 'gemini' | 'ninguno' {
+  const anthropic = claveDeChat('anthropic');
+  const gemini = claveDeChat('gemini');
+
+  if (config.chatProvider === 'anthropic') return anthropic ? 'anthropic' : 'ninguno';
+  if (config.chatProvider === 'gemini') return gemini ? 'gemini' : 'ninguno';
+
+  // auto: el que tenga clave. Con las dos, Anthropic, que es como venía.
+  if (anthropic) return 'anthropic';
+  if (gemini) return 'gemini';
+  return 'ninguno';
+}
+
+/**
+ * La clave de un proveedor: primero el entorno, después lo cargado en el
+ * panel. Se resuelve a demanda para no atarla al arranque.
+ *
+ * El import va adentro a propósito: secretos.ts necesita la base, y la base
+ * necesita config. Cargarlo arriba haría un círculo.
+ */
+export function claveDeChat(proveedor: 'anthropic' | 'gemini'): string {
+  const delEntorno = proveedor === 'anthropic' ? config.anthropicApiKey : config.geminiApiKey;
+  if (delEntorno) return delEntorno;
+  return leerClaveGuardada(proveedor);
+}
+
+/** Lo pone db/index.ts al arrancar. Sin esto, solo se usan las del entorno. */
+let leerClaveGuardada: (proveedor: 'anthropic' | 'gemini') => string = () => '';
+
+export function registrarLectorDeClaves(fn: (p: 'anthropic' | 'gemini') => string): void {
+  leerClaveGuardada = fn;
+}
+
+export const hasLLM = () => proveedorDeChat() !== 'ninguno';
 
 export const isProduction = () => config.env === 'production';
 

@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config } from '../config.js';
+import { config, registrarLectorDeClaves } from '../config.js';
 import { baseDe, cerrarTodas, localActual, registrarEsquema } from './locales.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -32,6 +32,31 @@ export function db(): Database.Database {
 // Se registra al cargar el modulo: asi da igual desde donde se abra una base
 // —al dar de alta el local o al primer pedido— que el esquema queda aplicado.
 registrarEsquema((handle) => aplicarEsquema(handle, leerEsquema()));
+
+/**
+ * Las claves del chat también se pueden cargar desde el panel, cifradas.
+ *
+ * Se registra acá y no en config.ts porque leerlas necesita la base, y la base
+ * necesita config: cargarlo al revés haría un círculo. Se hace a demanda, así
+ * que cambiar la clave desde el panel tiene efecto en el mensaje siguiente,
+ * sin reiniciar nada.
+ */
+registrarLectorDeClaves((proveedor) => {
+  try {
+    // Import diferido por lo mismo: secretos.ts usa getSetting de este módulo.
+    return leerSecretoDeChat(proveedor);
+  } catch {
+    // Sin base todavía (o sin ADMIN_TOKEN): solo valen las del entorno.
+    return '';
+  }
+});
+
+/** Se completa abajo, una vez que secretos.ts terminó de cargar. */
+let leerSecretoDeChat: (proveedor: 'anthropic' | 'gemini') => string = () => '';
+
+export function registrarSecretosDeChat(fn: (p: 'anthropic' | 'gemini') => string): void {
+  leerSecretoDeChat = fn;
+}
 
 /**
  * Aplica el esquema, sentencia por sentencia y en el orden del archivo.

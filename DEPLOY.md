@@ -269,6 +269,37 @@ backup **antes**, no después.
 
 ---
 
+## Con qué entiende el bot
+
+Sin clave, comeIA usa un motor **determinista**: entiende con reglas y
+coincidencia difusa. Toma bien *"quiero 6 empanadas de carne"* y se pierde con
+*"sacale la cebolla a dos de las cuatro"*. El local funciona igual, pero el bot
+no sirve para mucho más que un pedido simple.
+
+Se conecta en **Bot → Con qué entiende el bot**, con una clave de cualquiera de
+los dos:
+
+| | Dónde sacarla | Empieza con |
+|---|---|---|
+| **Gemini** (Google) | `aistudio.google.com` | `AIza` |
+| **Claude** (Anthropic) | `console.anthropic.com` | `sk-ant-` |
+
+Con una alcanza. Si están las dos, se usa Claude —así una instalación que ya
+venía andando no cambia de motor porque alguien cargó otra clave—.
+
+**Probar** le pregunta al proveedor si la clave sirve. Con Gemini además
+**lista los modelos que esa clave puede usar**: los nombres cambian seguido y
+un modelo inexistente da un 404 que no dice cuáles sí están.
+
+También se pueden dejar en el `.env` (`GEMINI_API_KEY`, `GEMINI_MODEL`,
+`ANTHROPIC_API_KEY`, `CHAT_MODEL`); esas le ganan a las del panel. Con
+`CHAT_PROVIDER` se fuerza uno (`anthropic` o `gemini`) en vez de dejar que
+elija solo.
+
+Si el modelo falla en medio de un pedido, el bot **cae al motor determinista**
+y contesta igual. Un bot que no contesta es peor que uno que contesta con
+reglas.
+
 ## Los canales y los cobros
 
 Los dos son **opcionales** y el sistema funciona sin ninguno.

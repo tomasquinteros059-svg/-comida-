@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { getSetting, setSetting } from '../db/index.js';
+import { getSetting, registrarSecretosDeChat, setSetting } from '../db/index.js';
 import { config } from '../config.js';
 
 /**
@@ -112,3 +112,21 @@ export function leerSecreto(nombre: string): string {
 
 /** true si hay algo guardado, sin abrirlo. Para saber si hace falta pedirlo. */
 export const hayGuardado = (nombre: string): boolean => Boolean(getSetting(clave(nombre), ''));
+
+// ── Las claves del chat ─────────────────────────────────────────────────────
+
+/** Dónde vive la clave de cada proveedor del chat. */
+export const SECRETO_DE_CHAT = {
+  anthropic: 'chat.anthropic_api_key',
+  gemini: 'chat.gemini_api_key',
+} as const;
+
+/**
+ * Se le avisa a config.ts que también puede leer las claves de acá.
+ *
+ * El camino da una vuelta —config no puede importar la base, y la base no
+ * puede importar secretos al arrancar— así que cada módulo registra lo suyo
+ * cuando termina de cargar. El efecto es simple: una clave cargada desde el
+ * panel vale igual que una del .env, y la del .env le gana.
+ */
+registrarSecretosDeChat((proveedor) => leerSecreto(SECRETO_DE_CHAT[proveedor]));
