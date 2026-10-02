@@ -6,15 +6,26 @@
 :root {
   color-scheme: light dark;
 
-  --bg: #f4f2ef;
-  --surface: #ffffff;
-  --surface-2: #faf8f5;
-  --border: #e2ddd6;
-  --border-strong: #cec7bd;
+  /* El fondo es color papa frita: es una rotisería, y el panel se mira seis
+     horas por día. El tono salió de buscar el más dorado que todavía deja
+     leer los subtítulos de sección, que van apoyados directo sobre él. Más
+     oscuro que esto y el gris de los subtítulos baja de 3:1. */
+  --bg: #f5e0b0;
+  /* Las tarjetas, en blanco cálido: el blanco puro sobre dorado se ve azul. */
+  --surface: #fffdf7;
+  --surface-2: #fbf4e4;
+  --border: #e7d5aa;
+  --border-strong: #d4bd87;
 
-  --text: #1c1a17;
-  --text-soft: #6b6459;
-  --text-faint: #9a9288;
+  --text: #1f1a12;
+  /* Los dos grises van más oscuros que antes porque ahora caen sobre dorado
+     y no sobre gris claro. */
+  --text-soft: #5f594f;
+  /* Justo 4.5:1 contra el fondo dorado, que es el caso duro: los subtítulos
+     de sección van apoyados directo sobre él, sin tarjeta en el medio. El
+     valor viejo daba 2.75 ahí y 3.07 sobre la tarjeta: no llegaba al mínimo
+     ni antes de cambiar el fondo. Lo encontró qa/contraste.mjs. */
+  --text-faint: #6a645c;
 
   --accent: #c2410c;
   --accent-soft: #fff1e9;
@@ -22,6 +33,11 @@
   /* Texto sobre el color de acento. En claro el acento es oscuro y va blanco;
      en oscuro el acento es claro y el blanco no contrasta. */
   --on-accent: #ffffff;
+  /* El texto de la chapita de pedidos nuevos. Existe como variable porque de
+     noche el rojo se aclara —el mismo blanco encima baja a 2.77:1— y antes
+     estaba fijo en #fff, así que el número no se leía justo en la pantalla
+     que avisa que hay un pedido esperando. */
+  --on-danger: #ffffff;
 
   --ok: #15803d;
   --ok-soft: #eaf6ee;
@@ -34,7 +50,8 @@
 
   --radius: 10px;
   --radius-sm: 6px;
-  --shadow: 0 1px 2px rgba(28, 26, 23, 0.06), 0 4px 16px rgba(28, 26, 23, 0.04);
+  /* La sombra va cálida: una sombra gris sobre dorado se ve sucia. */
+  --shadow: 0 1px 2px rgba(92, 64, 18, 0.10), 0 4px 16px rgba(92, 64, 18, 0.07);
 
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
@@ -42,15 +59,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #171614;
-    --surface: #201e1b;
-    --surface-2: #262320;
-    --border: #35312c;
-    --border-strong: #4a453e;
+    /* De noche la papa frita es la papa tostada: el mismo tono, apagado. */
+    --bg: #1c1712;
+    --surface: #262019;
+    --surface-2: #2e2720;
+    --border: #3e3529;
+    --border-strong: #544936;
 
-    --text: #f0ece6;
-    --text-soft: #a8a094;
-    --text-faint: #7d766c;
+    --text: #f5ecdd;
+    --text-soft: #b0a593;
+    /* Contra --surface-2, que es el fondo más claro del modo oscuro. */
+    --text-faint: #998e7a;
 
     --accent: #fb923c;
     --accent-soft: #33220f;
@@ -62,6 +81,7 @@
     --warn: #fbbf24;
     --warn-soft: #2e2410;
     --danger: #f87171;
+    --on-danger: #3f0d0d;
     --danger-soft: #331b1b;
     --info: #93b4fd;
     --info-soft: #1a2136;
@@ -142,7 +162,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav-count {
   margin-left: auto;
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
   border-radius: 999px;
   padding: 0 6px;
   font-size: 0.68rem;

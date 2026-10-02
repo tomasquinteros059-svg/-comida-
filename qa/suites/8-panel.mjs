@@ -1,6 +1,9 @@
 import { chromium, devices } from 'playwright';
 const BASE = 'http://127.0.0.1:3000';
-const QA = process.env.QA;
+// Dónde dejar las capturas. Sin esto, al correr la suite suelta —sin el
+// script que define QA— las capturas terminaban en un directorio llamado
+// "undefined" colgando de donde estuvieras parado.
+const QA = process.env.QA || new URL('.', import.meta.url).pathname;
 const errores = [];
 
 

@@ -49,6 +49,34 @@ cuando falta la mozzarella. El validador lo nombra por su nombre.
 Sin usuario y clave revisa solo lo que se ve desde afuera, que también sirve:
 si el panel contesta sin sesión, eso ya es todo lo que hay que saber.
 
+## Contraste, medido sobre la pantalla
+
+`qa/contraste.mjs` recorre la demo en el navegador y mide el contraste del
+texto que de verdad se ve, contra el fondo que de verdad tiene detrás.
+
+```bash
+npm run build:demo
+node qa/contraste.mjs
+```
+
+Existe por un error propio. Al cambiar el fondo a color papa frita medí los
+pares de variables CSS y uno dio 3.99, abajo del mínimo; estuve por oscurecer
+el dorado entero para arreglarlo. No hacía falta: **el acento nunca se apoya
+sobre el fondo**, vive en la barra lateral, que es blanca. El par existía en mi
+planilla y no en el producto.
+
+Medir la pantalla en vez de los tokens encontró además catorce fallas que la
+planilla no veía, y que **ya estaban antes de tocar el color**: el gris tenue
+daba 2.75 sobre el fondo claro, y la chapita de pedidos nuevos tenía el texto
+fijo en `#fff` cuando de noche el rojo se aclara —blanco sobre rojo claro, 2.77—
+así que el número no se leía justo en la pantalla que avisa que hay un pedido
+esperando.
+
+Lo que mira: sube por los padres hasta encontrar un fondo opaco, igual que
+compone el navegador; resuelve la transparencia; y usa el mínimo que
+corresponde al tamaño y al grosor de cada texto (3:1 para el grande, 4.5:1 para
+el resto). Lo que no está en pantalla no se mide.
+
 ## Antes de conectar WhatsApp
 
 `qa/comprobar-webhook.mjs` no prueba el producto: prueba **tu instalación**,
