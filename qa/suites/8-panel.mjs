@@ -1,4 +1,5 @@
-import { chromium, devices } from 'playwright';
+import { devices } from 'playwright';
+import { abrirNavegador } from '../navegador.mjs';
 const BASE = 'http://127.0.0.1:3000';
 // Dónde dejar las capturas. Sin esto, al correr la suite suelta —sin el
 // script que define QA— las capturas terminaban en un directorio llamado
@@ -7,7 +8,7 @@ const QA = process.env.QA || new URL('.', import.meta.url).pathname;
 const errores = [];
 
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await abrirNavegador();
 
 async function sesion(nombre, viewport, pasos) {
   const ctx = await browser.newContext(viewport);

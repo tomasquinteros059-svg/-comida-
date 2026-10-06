@@ -1,11 +1,19 @@
 # QA contra la pila de verdad
 
-`npm test` corre 291 tests de unidad y no toca ni el contenedor, ni el
+`npm test` corre 323 tests de unidad y no toca ni el contenedor, ni el
 navegador, ni la demo. Lo que hay acá es lo otro: las cosas que solo se rompen
 cuando las piezas están juntas.
 
 Cada suite está acá porque el bug que la motivó **no lo agarraba ningún test de
 unidad**.
+
+Dos de esos tests salieron de este QA, de buscar qué rutas del servidor no
+tocaba nadie: **cerrar las sesiones de alguien** —el botón que se aprieta
+cuando alguien se va del local o se le pierde el teléfono— no tenía ninguna
+prueba, ni la ruta ni la función. Anda bien; lo que faltaba era que algo lo
+sostuviera. Lo mismo con el orden de la carta y con los modificadores de cada
+producto, que es de donde sale que a una milanesa se le pueda sacar la
+cebolla.
 
 ## Todo junto
 
@@ -15,15 +23,17 @@ npx playwright install     # y el navegador, si no lo tenés
 ./qa/correr-todo.sh
 ```
 
-Son 144 casos en ocho suites, cada una sobre una pila recién levantada. Eso
+Son diecisiete pasos, cada uno sobre una pila recién levantada. Eso
 último importa: sin pila limpia las suites se ensucian entre sí —una le cambia
 la clave a un usuario que la siguiente usa, otra agota el límite de intentos a
 propósito— y el resultado no dice nada del producto, solo del orden en que se
 corrieron.
 
 Las suites viven en `qa/suites/`. Van numeradas en el orden en que conviene
-leerlas: acceso, flujo operativo, claves, bitácora, canales, y las tres del
-navegador.
+leerlas: acceso, flujo operativo, claves, bitácora, canales, las tres del
+navegador, y después las que antes vivían sueltas —conectar WhatsApp, Mercado
+Pago y el motor desde el panel, el circuito completo de WhatsApp, la demo de
+un solo archivo y el contraste—.
 
 ## Antes de entregar una instalación
 
@@ -48,6 +58,53 @@ cuando falta la mozzarella. El validador lo nombra por su nombre.
 
 Sin usuario y clave revisa solo lo que se ve desde afuera, que también sirve:
 si el panel contesta sin sesión, eso ya es todo lo que hay que saber.
+
+## Una comprobación que no corre tiene que notarse
+
+`qa/navegador.mjs` es el único lugar donde se abre el navegador. Está porque
+cuatro comprobaciones —`secciones`, `whatsapp-desde-el-panel`,
+`cobros-desde-el-panel` y `motor-desde-el-panel`— llamaban a
+`chromium.launch()` a secas y, donde el navegador no está en la ruta por
+defecto, **se morían sin imprimir una sola línea**. No fallaban: no decían
+nada. Quien las corría veía el título de la sección, nada abajo, y seguía de
+largo.
+
+Mientras tanto se pudrieron por dentro sin que nadie se enterara. Al hacerlas
+correr de nuevo aparecieron tres cosas que ya estaban rotas:
+
+  · la prueba de WhatsApp tomaba los campos por posición (`.nth(2)`). Cuando
+    la pantalla de Chatbot ganó la sección del motor, el tercer input dejó de
+    ser la palabra de verificación;
+  · leía `.card` y la primera de la pantalla, que también pasó a ser la del
+    motor. Una comprobación falló y **la otra siguió pasando por el motivo
+    equivocado**, porque la tarjeta del motor tampoco dice que falten las
+    credenciales de WhatsApp;
+  · y encontró un botón duplicado de verdad: en Chatbot había dos "Guardar y
+    probar", el de WhatsApp y el del motor. Por el texto solo eran el mismo
+    botón, para un lector de pantalla y para cualquier automatización. Ahora
+    cada uno tiene su `aria-label`.
+
+Las otras cinco sí abrían, pero con la ruta del navegador escrita a mano y con
+el número de versión adentro (`chromium-1194`), que se rompe sola cuando se
+actualiza la imagen. Ahora la resuelve `navegador.mjs`: lo que diga
+`CHROMIUM`, si no lo que encuentre Playwright, si no cualquier chromium
+instalado. Y si no puede abrirlo, lo dice en castellano en vez de morirse
+callado.
+
+## La demo en un solo archivo
+
+```bash
+npm run build:unico
+node qa/demo-unico.mjs
+```
+
+Es el archivo que se manda por mail o por WhatsApp para mostrar el panel sin
+instalar nada, y no lo cubría ninguna suite: las otras prueban el servidor y
+esta no tiene servidor —el backend está simulado adentro del mismo HTML—. Se
+abre con `file://` a propósito, que es como llega: si el empaquetado quedó
+pidiendo una dirección absoluta, acá se ve y en un servidor local no. Recorre
+las ocho pantallas en escritorio y en teléfono y mira que ninguna quede en
+blanco.
 
 ## Contraste, medido sobre la pantalla
 
@@ -88,9 +145,10 @@ be validated" sin decir qué. Esto lo dice.
 node qa/comprobar-webhook.mjs https://tu-direccion LA-PALABRA
 ```
 
-## Las sueltas
+## Correr una sola
 
-Necesitan la pila levantada y sembrada:
+Todas entran en `correr-todo.sh`, pero para correr una sola alcanza con tener
+la pila levantada y sembrada:
 
 ```bash
 docker compose up -d

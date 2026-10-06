@@ -1,4 +1,5 @@
-import { chromium, devices } from 'playwright';
+import { devices } from 'playwright';
+import { abrirNavegador } from './navegador.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -133,7 +134,7 @@ const MEDIR = `(() => {
   return salida;
 })()`;
 
-const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const br = await abrirNavegador();
 
 /** Por dónde pasear: toda pantalla que tenga texto propio. */
 const PANTALLAS = [

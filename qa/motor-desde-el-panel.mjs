@@ -8,7 +8,7 @@
  * Lo que importa, además de que funcione: que la clave no quede legible en la
  * base, y que el panel nunca la devuelva.
  */
-import { chromium } from 'playwright';
+import { abrirNavegador } from './navegador.mjs';
 import { execFileSync } from 'node:child_process';
 
 const BASE = 'http://127.0.0.1:3000';
@@ -21,7 +21,7 @@ const caso = (n, cumple, d = '') => {
   else { fallas.push(`${n} — ${d}`); console.log(`FALLA ${n} — ${d}`); }
 };
 
-const b = await chromium.launch();
+const b = await abrirNavegador();
 const p = await b.newPage({ viewport: { width: 1440, height: 1200 } });
 const errores = [];
 p.on('pageerror', (e) => errores.push(String(e).split('\n')[0]));
@@ -55,7 +55,9 @@ const campos = p.locator('.card input[type="password"]');
 caso('pide una clave por proveedor', (await campos.count()) >= 2, `hay ${await campos.count()}`);
 
 await campos.nth(0).fill(CLAVE);
-await p.getByRole('button', { name: 'Guardar y probar' }).first().click();
+// Por su etiqueta accesible, no por ser el primero: en esta pantalla hay dos
+// "Guardar y probar" y cuál va primero depende del orden de las secciones.
+await p.getByRole('button', { name: 'Guardar y probar el motor del bot' }).click();
 await p.waitForTimeout(5000);
 
 const despues = await p.locator('.content').innerText();

@@ -9,7 +9,7 @@
  * Lo que importa, además de que funcione: que el token de Mercado Pago no
  * quede legible en la base, porque la base se respalda.
  */
-import { chromium } from 'playwright';
+import { abrirNavegador } from './navegador.mjs';
 import { execFileSync } from 'node:child_process';
 
 const BASE = 'http://127.0.0.1:3000';
@@ -23,7 +23,7 @@ const caso = (n, cumple, detalle = '') => {
   else { fallas.push(`${n} — ${detalle}`); console.log(`FALLA ${n} — ${detalle}`); }
 };
 
-const b = await chromium.launch();
+const b = await abrirNavegador();
 const p = await b.newPage({ viewport: { width: 1440, height: 1200 } });
 const errores = [];
 p.on('pageerror', (e) => errores.push(String(e).split('\n')[0]));

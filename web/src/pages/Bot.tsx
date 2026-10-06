@@ -320,6 +320,11 @@ function Whatsapp() {
           <div className="row tight">
             <button
               className="btn primary small"
+              /* Dos botones de esta pantalla dicen "Guardar y probar": el de
+                 WhatsApp y el del motor del bot. Por el texto solo son el
+                 mismo botón, tanto para un lector de pantalla como para
+                 cualquier automatización. */
+              aria-label="Guardar y probar WhatsApp"
               disabled={Object.values(valores).every((v) => !v?.trim())}
               onClick={guardar}
             >
@@ -788,6 +793,9 @@ function Motor() {
           <div className="row tight">
             <button
               className="btn primary small"
+              /* Ver el mismo botón en la tarjeta de WhatsApp: por el texto
+                 solo, los dos son "Guardar y probar". */
+              aria-label="Guardar y probar el motor del bot"
               disabled={Object.values(valores).every((v) => !v?.trim())}
               onClick={guardar}
             >

@@ -6,7 +6,8 @@
  * que apunta a una pantalla equivocada, un encabezado que en el teléfono tapa
  * lo que hay abajo. Nada de eso lo ve un test de unidad.
  */
-import { chromium, devices } from 'playwright';
+import { devices } from 'playwright';
+import { abrirNavegador } from './navegador.mjs';
 
 const BASE = 'http://127.0.0.1:3000';
 let ok = 0;
@@ -27,7 +28,7 @@ const entrar = async (p) => {
   }
 };
 
-const b = await chromium.launch();
+const b = await abrirNavegador();
 
 // ── Escritorio ──────────────────────────────────────────────────────────────
 const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 } });

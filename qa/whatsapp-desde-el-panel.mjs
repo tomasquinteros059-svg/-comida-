@@ -10,7 +10,7 @@
  *   - que el panel nunca devuelva lo que guardó;
  *   - que la variable de entorno le siga ganando al panel.
  */
-import { chromium } from 'playwright';
+import { abrirNavegador } from './navegador.mjs';
 
 const BASE = 'http://127.0.0.1:3000';
 const TOKEN_DE_META = 'EAAG0000ElTokenDeMetaDelLocal';
@@ -36,7 +36,7 @@ const entrar = async (p) => {
   }
 };
 
-const b = await chromium.launch();
+const b = await abrirNavegador();
 const p = await b.newPage({ viewport: { width: 1440, height: 1100 } });
 const errores = [];
 p.on('pageerror', (e) => errores.push(String(e).split('\n')[0]));
@@ -57,8 +57,19 @@ caso(
 // ── 2. La palabra de verificación se puede inventar sola ────────────────────
 await p.getByRole('button', { name: 'Inventar una' }).click();
 await p.waitForTimeout(300);
-const campos = p.locator('.card input:not([readonly])');
-const palabraSugerida = await campos.nth(2).inputValue();
+
+/**
+ * Cada campo, por su etiqueta.
+ *
+ * Antes se los tomaba por posición —`.nth(2)` sobre todos los inputs de la
+ * pantalla— y eso aguantó hasta que la pantalla de Chatbot ganó secciones:
+ * el tercer input dejó de ser la palabra de verificación y la prueba empezó a
+ * mirar otra cosa. Por la etiqueta no se mueve aunque se reordene la página.
+ */
+const campo = (etiqueta) =>
+  p.locator('label.field').filter({ hasText: etiqueta }).locator('input').first();
+
+const palabraSugerida = await campo('Palabra de verificación').inputValue();
 caso(
   'propone una palabra de verificación al azar',
   palabraSugerida.length >= 20,
@@ -66,15 +77,27 @@ caso(
 );
 
 // ── 3. Cargar las cuatro y guardar ──────────────────────────────────────────
-await campos.nth(0).fill('123456789012345');
-await campos.nth(1).fill(TOKEN_DE_META);
-await campos.nth(2).fill(PALABRA);
-await campos.nth(3).fill('la-clave-secreta-de-la-app');
+await campo('Identificador del número').fill('123456789012345');
+await campo('Token de acceso').fill(TOKEN_DE_META);
+await campo('Palabra de verificación').fill(PALABRA);
+await campo('Clave secreta de la app').fill('la-clave-secreta-de-la-app');
 
-await p.getByRole('button', { name: 'Guardar y probar' }).click();
+// Por su etiqueta accesible: en esta pantalla hay dos "Guardar y probar"
+// —el de WhatsApp y el del motor del bot— y por el texto solo son iguales.
+await p.getByRole('button', { name: 'Guardar y probar WhatsApp' }).click();
 await p.waitForTimeout(3500);
 
-const textoTarjeta = await p.locator('.card').first().innerText();
+/**
+ * La tarjeta de WhatsApp, por su título.
+ *
+ * Antes era `.card` a secas y la primera de la pantalla. Cuando Chatbot ganó
+ * la sección del motor, la primera tarjeta pasó a ser esa: una de las dos
+ * comprobaciones de abajo empezó a fallar y la otra siguió "pasando" por el
+ * motivo equivocado, porque la tarjeta del motor tampoco dice que falten las
+ * credenciales de WhatsApp.
+ */
+const tarjetaWhatsapp = p.locator('.card').filter({ hasText: 'WhatsApp del local' }).last();
+const textoTarjeta = await tarjetaWhatsapp.innerText();
 caso(
   'después de guardar, ya no dice que faltan las credenciales',
   !/WhatsApp no está conectado/.test(textoTarjeta),

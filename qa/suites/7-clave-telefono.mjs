@@ -1,11 +1,12 @@
-import { chromium, devices } from 'playwright';
+import { devices } from 'playwright';
+import { abrirNavegador } from '../navegador.mjs';
 const B = 'http://127.0.0.1:3000';
 // Dónde dejar las capturas. Sin esto, al correr la suite suelta —sin el
 // script que define QA— las capturas terminaban en un directorio llamado
 // "undefined" colgando de donde estuvieras parado.
 const QA = process.env.QA || new URL('.', import.meta.url).pathname;
 const errores = [];
-const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const br = await abrirNavegador();
 
 const ctx = await br.newContext(devices['iPhone 13']);
 const page = await ctx.newPage();
@@ -33,6 +34,13 @@ await page.waitForTimeout(1200);
 const errorVisible = await page.textContent('.acceso-error').catch(() => null);
 console.log('con la clave actual mal, muestra:', JSON.stringify(errorVisible));
 await page.screenshot({ path: `${QA}/11-tel-clave-error.png`, fullPage: true });
+
+// El rechazo de recién es un 401, y el navegador lo anota como error de
+// consola. Es la respuesta correcta a una clave equivocada —la pedimos a
+// propósito— así que no cuenta como problema: dejarla ahí hacía que la suite
+// avisara de lo mismo en cada corrida, y una alarma que suena siempre enseña
+// a no mirarla. Se limpia acá y se sigue escuchando de la línea siguiente.
+errores.length = 0;
 
 // Ahora bien.
 await page.fill('#clave-actual', 'clave-de-prueba');
